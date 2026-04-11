@@ -1,6 +1,18 @@
 import streamlit as st
 import pandas as pd
+import re
 from modules.utils import load_spacy
+
+def clean_text(text):
+    """
+    Bridge function for cadis_evaluator.py.
+    Provides a standardized, cleaned string for the NLP models.
+    """
+    if not isinstance(text, str):
+        return ""
+    # Basic cleaning: remove extra whitespace and newlines
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 def render(doc_text):
     st.header("📝 Module 1 — NLP Preprocessing Engine")
@@ -8,11 +20,15 @@ def render(doc_text):
     with st.spinner("Loading spaCy…"):
         nlp = load_spacy()
 
-    doc = nlp(doc_text)
+    # Pre-process the text using the logic function
+    cleaned_text = clean_text(doc_text)
+    doc = nlp(cleaned_text)
+    
     tokens      = [t for t in doc if not t.is_space]
     sentences   = [s.text.strip() for s in doc.sents]
     stopwords   = [t.text for t in tokens if t.is_stop]
 
+    # UI Metrics
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Tokens", len(tokens))
     c2.metric("Sentences", len(sentences))
