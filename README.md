@@ -1,34 +1,154 @@
-# CADIS: Context-Aware Document Intelligence System 🧠
+# 🧠 CADIS: Context-Aware Document Intelligence System
 
-![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
 ![Python](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python&logoColor=white)
 ![HuggingFace](https://img.shields.io/badge/HuggingFace-Transformers-orange?style=for-the-badge&logo=huggingface&logoColor=white)
-
-CADIS is a comprehensive, 6-module Natural Language Processing (NLP) pipeline and research platform. It integrates standard transformer tasks (Extractive QA and Abstractive Summarization) with a novel, zero-shot semantic approach to resolving structural ambiguities (like Prepositional Phrase attachments). 
-
-The platform features a visually stunning, dark-mode Streamlit dashboard for real-time document analysis and a decoupled benchmarking engine for rigorous academic evaluation.
+![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-FF69B4?style=for-the-badge)
 
 ---
 
-## 🏗️ System Architecture
+## 🚀 Overview
 
-CADIS processes documents sequentially through 6 distinct modules:
+CADIS is an enterprise-grade **Multimodal Retrieval-Augmented Generation (RAG)** platform and academic research tool. It combines:
 
-1. **Preprocessing:** Tokenization, lemmatization, and POS tagging using `spaCy`.
-2. **Semantic Embeddings:** Document and sentence-level dense vector encoding using `all-MiniLM-L6-v2` for similarity heatmaps and semantic search.
-3. **NER & Information Extraction:** Entity recognition via `dslim/bert-base-NER` and rule-based Subject-Verb-Object (SVO) relation extraction.
-4. **Ambiguity Resolution (Novel Contribution):** Detects PP-attachment and anaphoric ambiguities, resolving them using zero-shot cosine similarity against contextual embeddings.
-5. **QA Engine:** Extractive question answering powered by `deepset/minilm-uncased-squad2`.
-6. **Intelligent Summarization:** Abstractive executive summaries via `sshleifer/distilbart-cnn-12-6`, combined with entity-dense key sentence extraction.
+- Extractive Question Answering  
+- Zero-shot Entity Extraction  
+- Abstractive Summarization  
+
+Along with a **novel semantic ambiguity resolution system** for interpreting complex text.
+
+The system is built as a **fully decoupled microservice architecture**:
+
+- ⚡ React Dashboard  
+- 🔗 Node.js API Gateway  
+- 🧠 FastAPI ML Backend  
 
 ---
 
-## 🚀 Installation & Setup
+## 🛠️ Tech Stack
+
+### 🎨 Frontend
+- React & Vite  
+- Tailwind CSS & Framer Motion  
+- Axios & Lucide React  
+
+### 🔗 Middleware
+- Node.js & Express.js  
+
+### 🧠 Backend
+- Python & FastAPI  
+- ChromaDB  
+- Uvicorn  
+
+### 🤖 Models
+- sentence-transformers/all-MiniLM-L6-v2  
+- urchade/gliner_base  
+- deepset/roberta-base-squad2  
+- sshleifer/distilbart-cnn-12-6  
+
+---
+
+## 🏗️ Architecture Pipeline
+
+1. **Ingestion & Vectorization**  
+2. **NER & Extraction**  
+3. **Ambiguity Resolution**  
+4. **Summarization**  
+5. **RAG QA Engine**  
+
+---
+
+## ⚙️ Installation
 
 ### Prerequisites
-Ensure you have Python 3.9+ installed on your system.
 
-### 1. Clone the Repository
+- Node.js (v18+)  
+- Python (3.9–3.12)  
+- Git  
+
+---
+
+### Clone Repo
+
 ```bash
-git clone [https://github.com/MKD2004/CADIS.git](https://github.com/MKD2004/CADIS.git)
+git clone https://github.com/MKD2004/CADIS.git
 cd CADIS
+```
+
+---
+
+## ⚡ Quick Start
+
+Run **3 terminals simultaneously**.
+
+---
+
+### 🧠 Terminal 1 — Backend
+
+```bash
+cd ml-service
+
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# Mac/Linux
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+uvicorn main:app --reload --port 8000
+```
+
+---
+
+### 🔗 Terminal 2 — Middleware
+
+```bash
+cd server
+
+npm install
+
+node server.js
+```
+
+---
+
+### 🎨 Terminal 3 — Frontend
+
+```bash
+cd client
+
+npm install
+
+npm run dev
+```
+
+---
+
+## 🌐 Access
+
+- Frontend → http://localhost:5173  
+- Backend → http://localhost:8000  
+
+---
+
+## 💡 Notes
+
+- Run all 3 services together  
+- Start backend first  
+- Check ports if errors occur  
+
+---
+
+## 🚀 Future Work
+
+- Multi-document reasoning  
+- Streaming responses  
+- Model fine-tuning  
+- Docker + Kubernetes deployment  
+
+---
