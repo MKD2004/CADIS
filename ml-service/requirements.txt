@@ -1,0 +1,45 @@
+# ══════════════════════════════════════════════════════════════
+#  CADIS API — requirements.txt
+#  Install:  pip install -r requirements.txt
+# ══════════════════════════════════════════════════════════════
+
+# ── Web framework ─────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0          # includes websockets + httptools
+gunicorn>=22.0.0                   # production process manager
+python-multipart>=0.0.9            # required for UploadFile / Form
+pydantic>=2.7.0
+pydantic-settings>=2.2.0           # Settings from .env
+
+# ── NLP core ─────────────────────────────────────────────────
+spacy>=3.7.0                       # Preprocessing (existing CADIS module)
+transformers>=4.40.0               # BERT NER, DistilBART, QA pipelines
+sentence-transformers>=2.7.0       # all-MiniLM-L6-v2 embeddings
+torch>=2.2.0                       # Backend for all HuggingFace models
+accelerate>=0.29.0                 # Multi-GPU / device_map="auto"
+
+# ── GliNER — zero-shot NER ────────────────────────────────────
+gliner>=0.2.0
+
+# ── PDF parsing — unstructured.io ────────────────────────────
+# "pdf" extra pulls in pdfminer.six, pdfplumber, pdf2image, pytesseract
+unstructured[pdf]>=0.13.0
+unstructured-inference>=0.7.0      # hi_res strategy (layout model)
+# System deps needed separately (see README):
+#   apt-get install -y poppler-utils tesseract-ocr libmagic1
+
+# ── Vector database ───────────────────────────────────────────
+chromadb>=0.5.0
+
+# ── Multimodal VLM (optional — only needed if VLM_ENABLED=true) ──
+# pip install transformers accelerate auto-gptq optimum
+# The base transformers package above is sufficient for the placeholder.
+# Uncomment for full Qwen-VL support:
+# auto-gptq>=0.7.0
+# optimum>=1.19.0
+
+# ── Utilities ────────────────────────────────────────────────
+httpx>=0.27.0                      # async HTTP client (used internally)
+numpy>=1.26.0
+Pillow>=10.3.0                     # image handling for VLM pipeline
+python-dotenv>=1.0.0               # .env file loading
