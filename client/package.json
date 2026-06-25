@@ -4,25 +4,33 @@
   "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "dev":     "vite",
-    "build":   "vite build",
+    "dev": "vite",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "axios":           "^1.7.2",
-    "framer-motion":   "^11.2.10",
-    "lucide-react":    "^0.394.0",
-    "react":           "^18.3.1",
-    "react-dom":       "^18.3.1",
-    "react-dropzone":  "^14.2.3"
+    "axios": "^1.7.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.2.10",
+    "gsap": "^3.15.0",
+    "lucide-react": "^0.394.0",
+    "mathjs": "^15.2.0",
+    "motion": "^12.41.0",
+    "ogl": "^1.0.11",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-dropzone": "^14.2.3",
+    "react-router-dom": "^6.23.0",
+    "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
-    "@types/react":            "^18.3.3",
-    "@types/react-dom":        "^18.3.0",
-    "@vitejs/plugin-react":    "^4.3.1",
-    "autoprefixer":            "^10.4.19",
-    "postcss":                 "^8.4.38",
-    "tailwindcss":             "^3.4.4",
-    "vite":                    "^5.3.1"
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "vite": "^5.3.1"
   }
 }

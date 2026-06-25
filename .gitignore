@@ -6,8 +6,29 @@ __pycache__/
 # Virtual environments
 venv/
 env/
+
+# Environment files
 .env
+.env.local
+.env.*
+!.env.example
 
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Node
+node_modules/
+
+# Build output
+dist/
+
+# ChromaDB data
+chroma_store/
+chromadb_data/
+
+# Uploads
+uploads/
+
+# Claude Code
+.claude/
