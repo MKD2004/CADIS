@@ -24,8 +24,7 @@ from models.schemas import (
 )
 from services.vector_store import VectorStoreService
 
-# ── NEW: Import the QA Service we just created ──
-from services.qa import qa_service 
+from services.qa import QAService
 
 logger = get_logger(__name__)
 
@@ -85,10 +84,10 @@ async def semantic_search(
             return {
                 "answer": "I could not find a definitive answer in the document.",
                 "context_used": "",
-                "results": []
+                "results": [],
+                "latency_ms": {"minilm": 0, "roberta": 0},
             }
 
-        # 2. Extract the text from the chunks and combine them into one block of context
         context_texts = []
         for item in raw_results:
             if isinstance(item, dict) and 'text' in item:
@@ -97,17 +96,21 @@ async def semantic_search(
                 context_texts.append(item.text)
             else:
                 context_texts.append(str(item))
-                
+
         context_text = " ".join(context_texts)
 
-        # 3. Ask RoBERTa to find the exact answer inside that block of context!
-        exact_answer = qa_service.answer_question(question=request.query, context=context_text)
+        qa_result = QAService.get_instance().answer_question(
+            question=request.query, context=context_text,
+        )
 
-        # Return the exact answer to the Node Gateway
         return {
-            "answer": exact_answer,
+            "answer": qa_result["answer"],
             "context_used": context_text,
-            "results": raw_results
+            "results": raw_results,
+            "latency_ms": {
+                "minilm": search_results.inference_ms,
+                "roberta": qa_result["inference_ms"],
+            },
         }
 
     except Exception as exc:
@@ -116,6 +119,32 @@ async def semantic_search(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Search failed: {exc}",
         ) from exc
+
+
+@router.get(
+    "/samples",
+    status_code     = status.HTTP_200_OK,
+    summary         = "List pre-loaded sample documents",
+)
+async def list_samples(
+    vector_store: VectorStoreService = Depends(get_vector_store),
+):
+    coll = vector_store._get_or_create_collection(
+        vector_store._settings.chroma_default_collection
+    )
+    results = coll.get(where={"source": {"$eq": "sample"}}, include=["metadatas"])
+
+    seen: dict[str, dict] = {}
+    for meta in results["metadatas"]:
+        doc_id = meta.get("document_id", "")
+        if doc_id and doc_id not in seen:
+            seen[doc_id] = {
+                "document_id": doc_id,
+                "title": meta.get("title", ""),
+                "type": meta.get("type", ""),
+                "source": "sample",
+            }
+    return list(seen.values())
 
 
 @router.post(

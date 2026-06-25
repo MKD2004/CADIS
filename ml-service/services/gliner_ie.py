@@ -115,14 +115,15 @@ class GliNERService:
             len(text), entity_labels,
         )
 
-        # GliNER predict_entities returns a list of dicts:
-        # [{"text": str, "label": str, "start": int, "end": int, "score": float}]
-        raw: list[dict] = self._model.predict_entities(
-            text,
-            entity_labels,
-            threshold=threshold,
-            flat_ner=flat_ner,
-        )
+        from core.metrics import timed_inference
+
+        with timed_inference("gliner") as timer:
+            raw: list[dict] = self._model.predict_entities(
+                text,
+                entity_labels,
+                threshold=threshold,
+                flat_ner=flat_ner,
+            )
 
         spans = [
             EntitySpan(
@@ -135,7 +136,6 @@ class GliNERService:
             for hit in raw
         ]
 
-        # Group by label for convenient downstream consumption
         grouped: dict[str, list[EntitySpan]] = defaultdict(list)
         for span in spans:
             grouped[span.label].append(span)
@@ -150,6 +150,7 @@ class GliNERService:
             entities      = spans,
             entity_count  = len(spans),
             grouped       = dict(grouped),
+            inference_ms  = timer.duration_ms,
         )
 
     # ── Batch extraction ──────────────────────────────────────

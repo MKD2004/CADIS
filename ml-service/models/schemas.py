@@ -8,7 +8,6 @@ a single source of truth for the API contract.
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,16 +16,18 @@ from pydantic import BaseModel, Field, field_validator
 #  Shared primitives
 # ─────────────────────────────────────────────────────────────
 
-class HealthStatus(str, Enum):
-    OK      = "ok"
-    DEGRADED = "degraded"
-    DOWN    = "down"
+class ModelStatus(BaseModel):
+    gliner:    bool = False
+    roberta:   bool = False
+    distilbart: bool = False
+    minilm:    bool = False
 
 
 class HealthResponse(BaseModel):
-    status:  HealthStatus = HealthStatus.OK
-    version: str          = "1.0.0"
-    services: dict[str, HealthStatus] = Field(default_factory=dict)
+    status:   str = "ok"
+    models:   ModelStatus = Field(default_factory=ModelStatus)
+    chromadb: bool = False
+    timestamp: str = ""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -74,6 +75,14 @@ class NERRequest(BaseModel):
         description="When True, overlapping spans are resolved greedily."
     )
 
+    @field_validator("text")
+    @classmethod
+    def text_must_not_be_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Text must not be empty after trimming whitespace.")
+        return v
+
     @field_validator("entity_labels")
     @classmethod
     def labels_must_be_non_empty(cls, v: list[str]) -> list[str]:
@@ -96,6 +105,7 @@ class NERResponse(BaseModel):
     entities:      list[EntitySpan]
     entity_count:  int
     grouped:       dict[str, list[EntitySpan]] = Field(default_factory=dict)
+    inference_ms:  float = 0.0
 
 
 # ─────────────────────────────────────────────────────────────
@@ -117,9 +127,17 @@ class UpsertResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     collection_name: str   = Field(default="cadis_documents")
-    query:           str   = Field(..., min_length=1)
+    query:           str   = Field(..., min_length=1, max_length=500)
     top_k:           int   = Field(default=5, ge=1, le=50)
     where:           dict[str, Any] | None = None   # ChromaDB metadata filter
+
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Query must be between 1 and 500 characters.")
+        return v
 
 
 class SearchResult(BaseModel):
@@ -130,8 +148,9 @@ class SearchResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    query:   str
-    results: list[SearchResult]
+    query:        str
+    results:      list[SearchResult]
+    inference_ms: float = 0.0
 
 
 class CollectionStatsResponse(BaseModel):

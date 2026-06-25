@@ -220,6 +220,8 @@ class VectorStoreService:
 
         logger.debug("Searching '%s' for: %r (top_k=%d)", coll_name, query, k)
 
+        from core.metrics import timed_inference
+
         kwargs: dict = dict(
             query_texts    = [query],
             n_results      = k,
@@ -228,7 +230,8 @@ class VectorStoreService:
         if where:
             kwargs["where"] = where
 
-        raw = collection.query(**kwargs)
+        with timed_inference("minilm") as timer:
+            raw = collection.query(**kwargs)
 
         results: list[SearchResult] = []
         for chunk_id, text, meta, dist in zip(
@@ -246,7 +249,7 @@ class VectorStoreService:
                 metadata = meta or {},
             ))
 
-        return SearchResponse(query=query, results=results)
+        return SearchResponse(query=query, results=results, inference_ms=timer.duration_ms)
 
     # ── Public: delete ────────────────────────────────────────
 
