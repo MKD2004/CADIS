@@ -6,29 +6,160 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 
+const { strictLimiter, uploadLimiter, generalLimiter } = require('./middleware/rateLimiter');
+const { validatePdfUpload, validateChatQuery } = require('./middleware/validate');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
 
 // Middleware
-app.use(cors());
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 // Setup Multer to catch PDF uploads temporarily
 const upload = multer({ dest: 'uploads/' });
 
+app.use('/api', generalLimiter);
+
 app.get('/api/status', (req, res) => {
     res.json({ status: 'Gateway Online', ml_backend: FASTAPI_URL });
 });
 
-// The main processing route
-// The main processing route & orchestrator
-// The main processing route & orchestrator
-app.post('/api/process-pdf', upload.single('file'), async (req, res) => {
+app.get('/health', async (req, res) => {
+    let mlHealth = 'unreachable';
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No PDF file uploaded.' });
+        const mlRes = await axios.get(`${FASTAPI_URL}/health`, { timeout: 3000 });
+        mlHealth = mlRes.data;
+    } catch (_) {}
+
+    const overall = mlHealth === 'unreachable' ? 'degraded' : 'ok';
+    res.json({
+        status: overall,
+        gateway: 'ok',
+        ml_backend: mlHealth,
+        timestamp: new Date().toISOString(),
+    });
+});
+
+// ── Sample documents ─────────────────────────────────────────
+app.get('/api/samples', async (req, res) => {
+    try {
+        const pyRes = await axios.get(`${FASTAPI_URL}/api/v1/search/samples`, { timeout: 5000 });
+        res.json(pyRes.data);
+    } catch (error) {
+        console.error('[Gateway] Failed to fetch samples:', error.message);
+        res.json([]);
+    }
+});
+
+app.post('/api/sample-analyze/:docId', strictLimiter, async (req, res) => {
+    try {
+        const { docId } = req.params;
+        console.log(`[Gateway] Analyzing sample document: ${docId}`);
+
+        // 1. Retrieve the sample text from ChromaDB
+        const searchRes = await axios.post(`${FASTAPI_URL}/api/v1/search/query`, {
+            query: 'full document content',
+            top_k: 50,
+            collection_name: 'cadis_documents',
+            where: { document_id: { '$eq': docId } }
+        }, { timeout: 30000 });
+
+        const chunks = searchRes.data.results || [];
+        const textToAnalyze = chunks.map(c => c.text || '').join(' ');
+
+        if (!textToAnalyze.trim()) {
+            return res.status(404).json({ error: 'Sample document not found or has no content.' });
         }
+
+        // 2. NER
+        let groupedEntities = {};
+        let sGlinerMs = 0;
+        try {
+            const nerRes = await axios.post(`${FASTAPI_URL}/api/v1/ner/extract`, {
+                text: textToAnalyze.substring(0, 2500),
+                entity_labels: ["Threat Actor", "Malware", "IP Address", "Vulnerability", "Company", "Person", "Location", "Date", "Money"],
+                threshold: 0.4,
+                flat_ner: true
+            });
+            sGlinerMs = nerRes.data.inference_ms || 0;
+            const rawEntities = nerRes.data.entities || [];
+            rawEntities.forEach(ent => {
+                const label = ent.label.toUpperCase();
+                if (!groupedEntities[label]) groupedEntities[label] = [];
+                groupedEntities[label].push(ent);
+            });
+        } catch (err) {
+            console.error('[Gateway] Sample NER failed:', err.message);
+        }
+
+        // 3. Summary
+        let finalSummary = textToAnalyze;
+        let sDistilbartMs = 0;
+        try {
+            const sumRes = await axios.post(`${FASTAPI_URL}/api/v1/summary/generate`, {
+                text: textToAnalyze
+            });
+            if (sumRes.data && sumRes.data.executive_summary) {
+                finalSummary = sumRes.data.executive_summary;
+            }
+            sDistilbartMs = sumRes.data.inference_ms || 0;
+        } catch (err) {
+            console.error('[Gateway] Sample summarization failed:', err.message);
+        }
+
+        // 4. Ambiguity
+        const ambiguityKeywords = ["unclear", "ambiguity", "unknown", "inconclusive", "cannot determine", "suspected"];
+        let ambiguitiesCount = 0;
+        ambiguityKeywords.forEach(keyword => {
+            const matches = textToAnalyze.match(new RegExp(keyword, "gi"));
+            if (matches) ambiguitiesCount += matches.length;
+        });
+
+        // 5. Get sample metadata for the title
+        const meta = chunks[0]?.metadata || {};
+
+        res.json({
+            document_id: docId,
+            filename: meta.title || docId,
+            extracted_text: textToAnalyze,
+            enriched_text: textToAnalyze,
+            executive_summary: finalSummary,
+            document_entities: groupedEntities,
+            pipeline_flags: {
+                ambiguities_found: ambiguitiesCount,
+                is_sample: true,
+            },
+            metadata: {
+                source: 'sample',
+                title: meta.title || docId,
+                chunks_stored: chunks.length,
+            },
+            latency_ms: {
+                gliner: sGlinerMs,
+                distilbart: sDistilbartMs,
+            },
+        });
+    } catch (error) {
+        console.error('[Gateway] Sample analyze error:', error.message);
+        res.status(500).json({ error: 'Failed to analyze sample document.' });
+    }
+});
+
+// ── PDF upload route & orchestrator ──────────────────────────
+app.post('/api/process-pdf', uploadLimiter, upload.single('file'), validatePdfUpload, async (req, res) => {
+    try {
 
         console.log(`[Gateway] Received PDF: ${req.file.originalname}`);
 
@@ -51,15 +182,17 @@ app.post('/api/process-pdf', upload.single('file'), async (req, res) => {
         console.log(`[Gateway] 2/4: Running Zero-Shot NER...`);
         let groupedEntities = {};
         let totalEntities = 0;
+        let glinerMs = 0;
 
         try {
             const nerRes = await axios.post(`${FASTAPI_URL}/api/v1/ner/extract`, {
-                text: textToAnalyze.substring(0, 2500), 
+                text: textToAnalyze.substring(0, 2500),
                 entity_labels: ["Threat Actor", "Malware", "IP Address", "Vulnerability", "Company", "Person", "Location", "Date", "Money"],
                 threshold: 0.4,
                 flat_ner: true
             });
 
+            glinerMs = nerRes.data.inference_ms || 0;
             const rawEntities = nerRes.data.entities || [];
             rawEntities.forEach(ent => {
                 const label = ent.label.toUpperCase();
@@ -73,7 +206,8 @@ app.post('/api/process-pdf', upload.single('file'), async (req, res) => {
 
         // --- STEP 3: DISTILBART SUMMARIZATION ---
         console.log(`[Gateway] 3/4: Generating Executive Summary...`);
-        let finalSummary = textToAnalyze; // Fallback is raw text
+        let finalSummary = textToAnalyze;
+        let distilbartMs = 0;
         try {
             const sumRes = await axios.post(`${FASTAPI_URL}/api/v1/summary/generate`, {
                 text: textToAnalyze
@@ -81,6 +215,7 @@ app.post('/api/process-pdf', upload.single('file'), async (req, res) => {
             if (sumRes.data && sumRes.data.executive_summary) {
                 finalSummary = sumRes.data.executive_summary;
             }
+            distilbartMs = sumRes.data.inference_ms || 0;
         } catch (err) {
             console.error('[Gateway] Summarization failed:', err.message);
         }
@@ -103,14 +238,16 @@ app.post('/api/process-pdf', upload.single('file'), async (req, res) => {
         
         const finalPayload = {
             ...docData,
-            executive_summary: finalSummary,   
+            executive_summary: finalSummary,
             document_entities: groupedEntities,
-            
-            // React specifically renders the UI from this object
             pipeline_flags: {
                 ...(docData.pipeline_flags || {}),
                 ambiguities_found: ambiguitiesCount
-            }
+            },
+            latency_ms: {
+                gliner: glinerMs,
+                distilbart: distilbartMs,
+            },
         };
 
 
@@ -132,29 +269,27 @@ app.post('/api/process-pdf', upload.single('file'), async (req, res) => {
 });
 
 // ── RAG Chat Interface Route ──────────────────────────────────
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', strictLimiter, validateChatQuery, async (req, res) => {
     try {
         const { query, document_id } = req.body;
-        
-        if (!query) {
-            return res.status(400).json({ error: 'Query is required.' });
-        }
 
         console.log(`[Gateway] Routing chat query to Brain: "${query}"`);
 
         // Forward the user's question to FastAPI (ChromaDB + RoBERTa)
-        const pyRes = await axios.post(`${FASTAPI_URL}/api/v1/search/query`, {
+        const searchPayload = {
             query: query,
             top_k: 3,
-            document_id: document_id === "current" ? null : document_id
-        }, {
+        };
+        if (document_id && document_id !== "current") {
+            searchPayload.where = { document_id: { '$eq': document_id } };
+        }
+        const pyRes = await axios.post(`${FASTAPI_URL}/api/v1/search/query`, searchPayload, {
             timeout: 30000
         });
 
-        // Simply pass RoBERTa's exact answer straight to the UI! 
-        // No more "Vector Space Match" hardcoding.
-        res.json({ 
-            answer: pyRes.data.answer || "I could not find a definitive answer in the document." 
+        res.json({
+            answer: pyRes.data.answer || "I could not find a definitive answer in the document.",
+            latency_ms: pyRes.data.latency_ms || {},
         });
 
     } catch (error) {
