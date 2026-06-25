@@ -1,132 +1,79 @@
-import { useState, useCallback } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import axios from "axios";
-import HeroUpload from "./components/HeroUpload";
-import ProcessingTerminal from "./components/ProcessingTerminal";
-import ResultsDashboard from "./components/ResultsDashboard";
+import { Routes, Route } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import StaggeredMenu from "./components/StaggeredMenu";
+import DarkVeil from "./components/DarkVeil";
+import TargetCursor from "./components/TargetCursor";
+import Home from "./pages/Home";
+import Analyze from "./pages/Analyze";
+import Module1 from "./pages/Module1";
+import Module2 from "./pages/Module2";
+import Module3 from "./pages/Module3";
+import Module4 from "./pages/Module4";
+import Module5 from "./pages/Module5";
+import Module6 from "./pages/Module6";
 
-// ── API endpoint ───────────────────────────────────────────────
-const API_URL = "http://localhost:5000/api/process-pdf";
+const menuItems = [
+  { label: "Home", ariaLabel: "Go to home page", link: "/" },
+  { label: "Analyze", ariaLabel: "Upload & Analyze", link: "/analyze" },
+  { label: "Preprocessing", ariaLabel: "NLP Preprocessing", link: "/module-1" },
+  { label: "Embeddings", ariaLabel: "Semantic Embeddings", link: "/module-2" },
+  { label: "NER + IE", ariaLabel: "Named Entity Recognition", link: "/module-3" },
+  { label: "Ambiguity", ariaLabel: "Ambiguity Resolution", link: "/module-4" },
+  { label: "QA Engine", ariaLabel: "Question Answering", link: "/module-5" },
+  { label: "Summary", ariaLabel: "Summary Generator", link: "/module-6" },
+];
 
-// ── Page transition variants ───────────────────────────────────
-const pageVariants = {
-  initial: { opacity: 0, y: 24, filter: "blur(8px)" },
-  animate: {
-    opacity: 1,
-    y: 0,
-    filter: "blur(0px)",
-    transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
-  },
-  exit: {
-    opacity: 0,
-    y: -16,
-    filter: "blur(4px)",
-    transition: { duration: 0.3, ease: [0.55, 0, 1, 0.45] },
-  },
-};
-
-// ── View states ────────────────────────────────────────────────
-const VIEWS = { IDLE: "idle", PROCESSING: "processing", RESULTS: "results" };
+const socialItems = [
+  { label: "GitHub", link: "https://github.com/MKD2004/CADIS" },
+  { label: "LinkedIn", link: "https://linkedin.com" },
+];
 
 export default function App() {
-  const [view,    setView]    = useState(VIEWS.IDLE);
-  const [results, setResults] = useState(null);
-  const [error,   setError]   = useState(null);
-  const [file,    setFile]    = useState(null);
-
-  // ── Submit handler ───────────────────────────────────────────
-  const handleFileSubmit = useCallback(async (acceptedFile) => {
-    setFile(acceptedFile);
-    setError(null);
-    setView(VIEWS.PROCESSING);
-
-    const formData = new FormData();
-    formData.append("file", acceptedFile);
-
-    try {
-      const { data } = await axios.post(API_URL, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        // Allow the terminal animation to play for at least 3s
-        // even if the server responds faster
-        timeout: 120_000,
-      });
-
-      // Minimum display time for the terminal (UX)
-      await new Promise((r) => setTimeout(r, 3200));
-
-      setResults(data);
-      setView(VIEWS.RESULTS);
-    } catch (err) {
-      const message =
-        err.response?.data?.detail ||
-        err.message ||
-        "Connection refused. Is the CADIS backend running?";
-      setError(message);
-      setView(VIEWS.IDLE);
-    }
-  }, []);
-
-  // ── Reset handler ────────────────────────────────────────────
-  const handleReset = useCallback(() => {
-    setView(VIEWS.IDLE);
-    setResults(null);
-    setFile(null);
-    setError(null);
-  }, []);
-
   return (
-    // Ambient background layer
-    <div className="relative min-h-screen bg-void overflow-hidden">
-      {/* Static grid texture */}
-      <div className="fixed inset-0 bg-grid opacity-100 pointer-events-none z-0" />
-
-      {/* Main content */}
-      <div className="relative z-10">
-        <AnimatePresence mode="wait">
-          {view === VIEWS.IDLE && (
-            <motion.div
-              key="hero"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
-              <HeroUpload
-                onFileAccepted={handleFileSubmit}
-                error={error}
-              />
-            </motion.div>
-          )}
-
-          {view === VIEWS.PROCESSING && (
-            <motion.div
-              key="terminal"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
-              <ProcessingTerminal fileName={file?.name} />
-            </motion.div>
-          )}
-
-          {view === VIEWS.RESULTS && results && (
-            <motion.div
-              key="results"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
-              <ResultsDashboard
-                data={results}
-                fileName={file?.name}
-                onReset={handleReset}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+    <div className="min-h-screen relative">
+      <TargetCursor
+        spinDuration={2}
+        hideDefaultCursor={false}
+        parallaxOn={true}
+        cursorColor="#ffffff"
+        cursorColorOnTarget="#298DFF"
+      />
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <DarkVeil
+          speed={0.3}
+          hueShift={350}
+          noiseIntensity={0}
+          warpAmount={0.4}
+          resolutionScale={1}
+        />
       </div>
+
+      <Navbar />
+      <StaggeredMenu
+        position="left"
+        items={menuItems}
+        socialItems={socialItems}
+        displaySocials={true}
+        displayItemNumbering={true}
+        menuButtonColor="#ffffff"
+        openMenuButtonColor="#fff"
+        changeMenuColorOnOpen={true}
+        colors={["#141420", "#298DFF"]}
+        accentColor="#298DFF"
+        isFixed={true}
+      />
+      <main className="relative z-10 pt-14">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/analyze" element={<Analyze />} />
+          <Route path="/module-1" element={<Module1 />} />
+          <Route path="/module-2" element={<Module2 />} />
+          <Route path="/module-3" element={<Module3 />} />
+          <Route path="/module-4" element={<Module4 />} />
+          <Route path="/module-5" element={<Module5 />} />
+          <Route path="/module-6" element={<Module6 />} />
+        </Routes>
+      </main>
     </div>
   );
 }
