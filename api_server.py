@@ -12,9 +12,22 @@ import io
 
 app = FastAPI(title="CADIS API", version="2.0")
 
+import os
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+]
+
+# Add Vercel deployment URL from environment variable if set
+_frontend_url = os.getenv("FRONTEND_URL")
+if _frontend_url:
+    ALLOWED_ORIGINS.append(_frontend_url.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
