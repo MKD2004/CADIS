@@ -51,8 +51,12 @@ def get_ner_pipe():
 
 @lru_cache(maxsize=1)
 def get_qa_pipe():
-    from transformers import pipeline
-    return pipeline("question-answering", model="deepset/minilm-uncased-squad2")
+    from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+    import torch
+    model_id = "deepset/minilm-uncased-squad2"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForQuestionAnswering.from_pretrained(model_id)
+    return tokenizer, model
 
 @lru_cache(maxsize=1)
 def get_summarizer():
@@ -269,6 +273,9 @@ def run_ambiguity(text: str, sp_doc, embedder):
 
 
 def run_qa(text: str, qa_pipe):
+    import torch
+    tokenizer, model = qa_pipe
+
     questions = [
         "Who is the main person mentioned?",
         "What organization is involved?",
@@ -279,26 +286,54 @@ def run_qa(text: str, qa_pipe):
         "What was the outcome?",
     ]
 
+    def answer_question(question: str, context: str):
+        inputs = tokenizer(question, context, return_tensors="pt",
+                           truncation=True, max_length=512)
+        with torch.no_grad():
+            outputs = model(**inputs)
+        start = torch.argmax(outputs.start_logits).item()
+        end   = torch.argmax(outputs.end_logits).item() + 1
+        # Convert confidence via softmax
+        start_conf = float(torch.softmax(outputs.start_logits, dim=-1)[0][start])
+        end_conf   = float(torch.softmax(outputs.end_logits,   dim=-1)[0][end - 1])
+        score = (start_conf + end_conf) / 2
+
+        input_ids = inputs["input_ids"][0]
+        # Find context offset (after [SEP] token)
+        sep_idx = (input_ids == tokenizer.sep_token_id).nonzero(as_tuple=True)[0]
+        ctx_start = int(sep_idx[0]) + 1 if len(sep_idx) > 0 else 0
+
+        answer_ids = input_ids[start:end]
+        answer = tokenizer.decode(answer_ids, skip_special_tokens=True).strip()
+
+        # Map token positions back to char positions in context
+        char_start, char_end = 0, 0
+        try:
+            encoding = tokenizer(question, context, return_offsets_mapping=True,
+                                 truncation=True, max_length=512)
+            offsets = encoding["offset_mapping"]
+            if start < len(offsets) and end - 1 < len(offsets):
+                char_start = offsets[start][0]
+                char_end   = offsets[end - 1][1]
+        except Exception:
+            pass
+
+        return answer, score, char_start, char_end
+
     results = []
     for q in questions:
         try:
-            r = qa_pipe(question=q, context=text)
-            if r["score"] > 0.04:
+            answer, score, char_start, char_end = answer_question(q, text[:2000])
+            if score > 0.04 and answer:
                 results.append({
                     "question":   q,
-                    "answer":     r["answer"],
-                    "confidence": round(float(r["score"]), 3),
-                    "start":      r["start"],
-                    "end":        r["end"],
+                    "answer":     answer,
+                    "confidence": round(score, 3),
+                    "start":      char_start,
+                    "end":        char_end,
                 })
             else:
-                results.append({
-                    "question":   q,
-                    "answer":     "",
-                    "confidence": 0.0,
-                    "start":      0,
-                    "end":        0,
-                })
+                results.append({"question": q, "answer": "", "confidence": 0.0, "start": 0, "end": 0})
         except Exception:
             results.append({"question": q, "answer": "", "confidence": 0.0, "start": 0, "end": 0})
 
@@ -416,15 +451,37 @@ class AskRequest(BaseModel):
 @app.post("/api/qa-ask")
 def qa_ask(req: AskRequest):
     """Answer a single custom question against the provided document."""
-    qa_pipe = get_qa_pipe()
+    import torch
+    tokenizer, model = get_qa_pipe()
     try:
-        r = qa_pipe(question=req.question.strip(), context=req.text.strip())
+        inputs = tokenizer(req.question.strip(), req.text.strip()[:2000],
+                           return_tensors="pt", truncation=True, max_length=512)
+        with torch.no_grad():
+            outputs = model(**inputs)
+        start = torch.argmax(outputs.start_logits).item()
+        end   = torch.argmax(outputs.end_logits).item() + 1
+        start_conf = float(torch.softmax(outputs.start_logits, dim=-1)[0][start])
+        end_conf   = float(torch.softmax(outputs.end_logits,   dim=-1)[0][end - 1])
+        score = (start_conf + end_conf) / 2
+        answer = tokenizer.decode(inputs["input_ids"][0][start:end], skip_special_tokens=True).strip()
+
+        char_start, char_end = 0, 0
+        try:
+            enc = tokenizer(req.question.strip(), req.text.strip()[:2000],
+                            return_offsets_mapping=True, truncation=True, max_length=512)
+            offsets = enc["offset_mapping"]
+            if start < len(offsets) and end - 1 < len(offsets):
+                char_start = offsets[start][0]
+                char_end   = offsets[end - 1][1]
+        except Exception:
+            pass
+
         return {
             "question":   req.question,
-            "answer":     r["answer"] if r["score"] > 0.01 else "",
-            "confidence": round(float(r["score"]), 4),
-            "start":      r["start"],
-            "end":        r["end"],
+            "answer":     answer if score > 0.01 and answer else "",
+            "confidence": round(score, 4),
+            "start":      char_start,
+            "end":        char_end,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
