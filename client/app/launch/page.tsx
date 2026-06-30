@@ -189,7 +189,7 @@ export default function LaunchPage() {
       const form = new FormData()
       form.append("file", f)
       try {
-        const res = await fetch("${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/extract", { method: "POST", body: form })
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/extract`, { method: "POST", body: form })
         if (!res.ok) {
           const err = await res.json()
           setError(err.detail ?? "Extraction failed")
@@ -250,7 +250,7 @@ export default function LaunchPage() {
     }, 4000)
 
     try {
-      const res = await fetch("${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/process", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: doc }),
