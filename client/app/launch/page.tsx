@@ -55,7 +55,7 @@ const MODULES = [
   { label: "Embeddings",    model: "all-MiniLM-L6-v2" },
   { label: "NER + IE",      model: "dslim/bert-base-NER" },
   { label: "Ambiguity",     model: "MiniLM + spaCy" },
-  { label: "QA Engine",     model: "minilm-uncased-squad2" },
+  { label: "QA Engine",     model: "roberta-base-squad2" },
   { label: "Summary",       model: "distilbart-cnn-12-6" },
 ]
 

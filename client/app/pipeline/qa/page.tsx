@@ -109,7 +109,7 @@ export default function QAPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
             <span className="inline-block px-3 py-1 rounded-full bg-zinc-800 text-zinc-400 text-xs font-mono mb-4">Module 05</span>
             <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2" style={{ fontFamily: "var(--font-cal-sans)" }}>QA Engine</h1>
-            <p className="text-zinc-500 font-mono text-sm">deepset/minilm-uncased-squad2 · extractive span QA · answers from your document only</p>
+            <p className="text-zinc-500 font-mono text-sm">deepset/roberta-base-squad2 · extractive span QA · answers from your document only</p>
           </motion.div>
 
           {/* Stats */}
@@ -132,7 +132,7 @@ export default function QAPage() {
             className="flex items-start gap-2.5 p-4 rounded-xl bg-zinc-900 border border-zinc-800 mb-8 text-xs text-zinc-500 font-mono">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-zinc-600" />
             <span>
-              Extractive QA confidence is a model-internal span score, not a probability. 20–50% is normal and still means a real answer was located.{" "}
+              Confidence is how far the best answer span outscores the model&apos;s own &quot;no answer here&quot; prediction. Above 80% is a confident extraction; the model returns nothing rather than guessing.{" "}
               <span className="text-zinc-400">Asking document-specific questions below will score higher than the generic presets.</span>
             </span>
           </motion.div>
