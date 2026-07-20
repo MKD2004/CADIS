@@ -33,3 +33,5 @@ uploads/
 
 # Claude Code
 .claude/
+# Local reference notes (not tracked)
+context.md
