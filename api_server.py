@@ -124,7 +124,16 @@ def _split_passages(text, words_per=PASSAGE_WORDS, overlap=PASSAGE_OVERLAP):
     return passages
 
 
-def _select_passages(question, passages, embedder, k=MAX_PASSAGES):
+def _embed_passages(passages, embedder):
+    """Encode passages once so a multi-question request doesn't re-encode the
+    same document per question — that was ~0.5s of wasted MiniLM work per
+    question on a 1700-word document."""
+    if not passages:
+        return None
+    return embedder.encode([p for p, _ in passages])
+
+
+def _select_passages(question, passages, embedder, k=MAX_PASSAGES, p_vec=None):
     """Semantic retrieval — rank passages against the question and keep the
     top-k, in document order. Keeps long documents answerable without running
     the QA model over every window."""
@@ -133,10 +142,34 @@ def _select_passages(question, passages, embedder, k=MAX_PASSAGES):
 
     from sklearn.metrics.pairwise import cosine_similarity
     q_vec = embedder.encode([question])
-    p_vec = embedder.encode([p for p, _ in passages])
+    if p_vec is None:
+        p_vec = _embed_passages(passages, embedder)
     sims = cosine_similarity(q_vec, p_vec)[0]
     keep = sorted(int(i) for i in np.argsort(-sims)[:k])
     return [passages[i] for i in keep]
+
+
+def _merge_passages(doc, passages):
+    """Merge retrieved passages that are adjacent or overlapping in the document
+    into contiguous blocks.
+
+    Retrieval ranks at 200-word granularity, but 200 words is only ~253 tokens —
+    below QA_WINDOW, so feeding passages individually meant the sliding window
+    never overflowed and QA_STRIDE never did anything. Merging first means a
+    retrieved region is one long context, so the 384-token window with its
+    128-token stride genuinely tiles it, and an answer straddling two adjacent
+    passages is recoverable instead of being cut at the seam."""
+    if not passages:
+        return []
+
+    spans = [[base, base + len(p)] for p, base in passages]
+    merged = [spans[0]]
+    for start, end in spans[1:]:
+        if start <= merged[-1][1]:          # contiguous or overlapping
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(doc[s:e], s) for s, e in merged]
 
 
 def _trim_span(text, start, end):
@@ -213,7 +246,8 @@ def _best_span(question, passages, tokenizer, model):
     return best, null_score
 
 
-def answer_question(question, text, tokenizer, model, embedder, passages=None):
+def answer_question(question, text, tokenizer, model, embedder,
+                    passages=None, p_vec=None):
     """Answer one question against a document. Returns an empty answer when the
     model is more confident there is no answer than in any candidate span."""
     question = (question or "").strip()
@@ -224,11 +258,14 @@ def answer_question(question, text, tokenizer, model, embedder, passages=None):
 
     if passages is None:
         passages = _split_passages(text)
-    passages = _select_passages(question, passages, embedder)
-    if not passages:
+    passages = _select_passages(question, passages, embedder, p_vec=p_vec)
+    # Merge before windowing so the 384-token sliding window actually tiles the
+    # retrieved region rather than seeing one short passage at a time.
+    blocks = _merge_passages(text, passages)
+    if not blocks:
         return empty
 
-    best, null_score = _best_span(question, passages, tokenizer, model)
+    best, null_score = _best_span(question, blocks, tokenizer, model)
     if best is None:
         return empty
 
@@ -580,12 +617,16 @@ PRESET_QUESTIONS = [
 
 def run_qa(text: str, qa_pipe, embedder):
     tokenizer, model = qa_pipe
-    passages = _split_passages(text)   # built once, reused for every question
+    # Split and embed once, then reuse for every question — only the question
+    # vector changes per question, so re-encoding the document was pure waste.
+    passages = _split_passages(text)
+    p_vec    = _embed_passages(passages, embedder)
 
     results = []
     for q in PRESET_QUESTIONS:
         try:
-            results.append(answer_question(q, text, tokenizer, model, embedder, passages))
+            results.append(answer_question(q, text, tokenizer, model, embedder,
+                                           passages, p_vec))
         except Exception:
             results.append({"question": q, "answer": "", "confidence": 0.0, "start": 0, "end": 0})
 

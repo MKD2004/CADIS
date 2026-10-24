@@ -82,9 +82,14 @@ hallucinate. Getting a *correct* span requires more than an argmax:
 
 - The document is split into overlapping 200-word passages; MiniLM ranks them against the
   question and the top 6 go to the model. Long documents stay answerable without running
-  the QA model over every window.
-- Each passage is tokenized into 384-token windows with a 128-token stride, so an answer
-  straddling a window boundary is still recoverable.
+  the QA model over every window. Passages are embedded **once per request**, not once per
+  question — only the question vector changes.
+  (Retrieval is a no-op below ~900 words, where every passage fits in the top 6 anyway.)
+- Retrieved passages that are adjacent in the document are **merged into contiguous blocks
+  before tokenization**. This matters: a lone 200-word passage is only ~253 tokens, which
+  never overflows a 384-token window, so feeding passages individually meant the stride
+  did nothing. Merged blocks run 400–650 tokens and genuinely tile into multiple windows
+  at a 128-token stride, so an answer straddling a passage seam is recoverable.
 - Candidate spans are restricted to *context* tokens, must satisfy `end >= start`, and are
   capped at 40 tokens.
 - SQuAD2 models emit a no-answer score at the `[CLS]` position. A span is only returned if
@@ -98,6 +103,34 @@ hallucinate. Getting a *correct* span requires more than an argmax:
 DistilBART accepts ~1024 tokens (roughly 750 words). Longer documents are split into
 evenly-sized sentence-aligned chunks, each chunk is summarized, near-duplicate sentences
 are dropped, and the result is condensed once more into the executive summary.
+
+---
+
+## Performance
+
+All five model loaders are wrapped in `@lru_cache(maxsize=1)`, so weights load once per
+worker process and are reused. `benchmark.py` measures what that buys:
+
+```
+python benchmark.py
+```
+
+Measured on a CPU-only laptop with weights already in `~/.cache/huggingface`:
+
+| Document | Warm request (inference) | Cold request (load + inference) | Ratio |
+|---|---|---|---|
+| 100 words | 7.9 s | 30.5 s | **3.8×** |
+| 400 words | 16.8 s | 39.4 s | **2.3×** |
+
+Model load is ~22–30 s and is paid exactly once; an `lru_cache` hit is ~6 µs. The
+cold/warm ratio is therefore **highest on short documents**, where load dominates, and
+falls as inference grows — it is a property of the document, not a single headline number.
+
+A true cold start *in deployment* is larger than any of these, because the Dockerfile
+deliberately does not pre-download weights (it blew past the HF Spaces build timeout), so
+the first request after a container wake also pays a ~1.5 GB network download. That cost
+is bandwidth-dependent and not reproducible as a fixed figure, which is why it is not
+quoted here.
 
 ---
 
@@ -159,8 +192,9 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 cadis_project/
 ├── api_server.py           # FastAPI backend — all six modules
-├── Dockerfile              # HuggingFace Spaces image (pre-downloads models)
+├── Dockerfile              # HuggingFace Spaces image (CPU torch; models fetched on first use)
 ├── requirements.txt        # Python dependencies
+├── benchmark.py            # Cold-vs-warm latency measurement for model caching
 ├── hf_README.md            # HF Space card metadata
 ├── client/                 # Next.js 15 frontend
 │   ├── app/
