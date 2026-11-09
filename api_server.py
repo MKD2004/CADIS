@@ -251,8 +251,13 @@ def answer_question(question, text, tokenizer, model, embedder,
     """Answer one question against a document. Returns an empty answer when the
     model is more confident there is no answer than in any candidate span."""
     question = (question or "").strip()
-    text = (text or "").strip()
-    empty = {"question": question, "answer": "", "confidence": 0.0, "start": 0, "end": 0}
+    # Offsets are computed on the stripped text but returned relative to the
+    # text the caller sent, so a client highlighting its own copy of the
+    # document lines up even when that copy has leading whitespace.
+    raw = text or ""
+    text = raw.strip()
+    lead = len(raw) - len(raw.lstrip())
+    empty ={"question": question, "answer": "", "confidence": 0.0, "start": 0, "end": 0}
     if not question or not text:
         return empty
 
@@ -283,39 +288,74 @@ def answer_question(question, text, tokenizer, model, embedder,
         "question":   question,
         "answer":     answer,
         "confidence": round(1.0 / (1.0 + math.exp(-margin)), 4),
-        "start":      char_start,
-        "end":        char_end,
+        "start":      char_start + lead,
+        "end":        char_end + lead,
     }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Abstractive summarization
 #
-# DistilBART accepts 1024 tokens (~750 words). Feeding it only the first 400
-# words of a document — as the original did — throws away everything after the
-# first two paragraphs, which is why summaries read as if they had missed the
-# point. Long documents are summarized chunk-by-chunk and then condensed again.
+# DistilBART accepts 1024 tokens (~750 words). Anything past that is silently
+# truncated, so every input handed to the model — chunk or reduce step — must
+# fit. Long documents are summarized chunk-by-chunk (map) and the partial
+# summaries are condensed (reduce), recursively if they are still too long.
+#
+# Chunks are sized in *tokens*, not words: word counts under-estimate tokens
+# for numeric or technical text, and a "400-word" chunk could still overflow.
+# There is deliberately no cap on the number of chunks — capping it either
+# dropped the tail of the document or forced chunks past 1024 tokens. Latency
+# therefore grows linearly with document length.
 # ══════════════════════════════════════════════════════════════════════════════
 
-SUM_CHUNK_WORDS = 400   # target words per chunk (DistilBART's limit is ~750)
-MAX_SUM_CHUNKS  = 6     # bounds latency on free-tier CPU
+SUM_MAX_TOKENS   = 1024  # DistilBART's input limit
+SUM_CHUNK_TOKENS = 512   # target tokens per chunk (~400 words)
+SUM_SHORT_WORDS  = 400   # at or below this, summarize in a single pass
 
 
-def _sentence_chunks(text, target_words=SUM_CHUNK_WORDS):
-    """Split into evenly-sized chunks on sentence boundaries.
+def _n_tokens(text, tokenizer):
+    return len(tokenizer(text, add_special_tokens=False)["input_ids"])
+
+
+def _sentence_units(text, tokenizer, limit):
+    """Split into sentences, then break any sentence longer than `limit`
+    tokens into word windows. PDF extraction often yields long runs with no
+    sentence punctuation, which would otherwise become one oversized chunk."""
+    units = []
+    for sent in re.split(r"(?<=[.!?])\s+", text):
+        sent = sent.strip()
+        if not sent:
+            continue
+        n = _n_tokens(sent, tokenizer)
+        if n <= limit:
+            units.append((sent, n))
+            continue
+        words = sent.split()
+        step = max(1, int(len(words) * limit / n * 0.9))
+        for i in range(0, len(words), step):
+            piece = " ".join(words[i:i + step])
+            units.append((piece, _n_tokens(piece, tokenizer)))
+    return units
+
+
+def _sentence_chunks(text, tokenizer, target=SUM_CHUNK_TOKENS,
+                     limit=SUM_MAX_TOKENS - 2):
+    """Split into evenly-sized, sentence-aligned chunks that each fit the model.
 
     Packing greedily at a fixed size leaves a stub final chunk, which then
     gets the same summary budget as a full one and skews coverage toward the
     end of the document. Sizing every chunk to total/n_chunks avoids that.
+    Every sentence lands in exactly one chunk — nothing is dropped.
     """
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-    total = len(text.split())
-    n_chunks = max(1, min(MAX_SUM_CHUNKS, math.ceil(total / target_words)))
-    per = math.ceil(total / n_chunks)
+    units = _sentence_units(text, tokenizer, limit)
+    if not units:
+        return []
+    total = sum(n for _, n in units)
+    n_chunks = max(1, math.ceil(total / target))
+    per = math.ceil(total / n_chunks)          # <= target <= limit
 
     chunks, current, count = [], [], 0
-    for sent in sentences:
-        n = len(sent.split())
+    for sent, n in units:
         if current and count + n > per:
             chunks.append(" ".join(current))
             current, count = [], 0
@@ -323,7 +363,7 @@ def _sentence_chunks(text, target_words=SUM_CHUNK_WORDS):
         count += n
     if current:
         chunks.append(" ".join(current))
-    return chunks[:MAX_SUM_CHUNKS]
+    return chunks
 
 
 def _clean_summary(text):
@@ -386,19 +426,24 @@ def summarize_document(text, tokenizer, model):
     words = text.split()
 
     # Short enough to summarize in one pass.
-    if len(words) <= SUM_CHUNK_WORDS:
+    if len(words) <= SUM_SHORT_WORDS and _n_tokens(text, tokenizer) <= SUM_MAX_TOKENS - 2:
         max_len = max(80, min(150, len(words) // 3))
         return _generate(text, tokenizer, model, max_len, min(45, max_len - 20))
 
     # Map: summarize each chunk with cheap beams.
-    chunks = _sentence_chunks(text)
+    chunks = _sentence_chunks(text, tokenizer)
     partials = [_generate(c, tokenizer, model, 110, 40, beams=2) for c in chunks]
 
     # Reduce: condense the partials into one executive summary.
     joined = _dedupe_sentences(" ".join(partials))
     if len(joined.split()) <= 160:
         return _clean_summary(joined)
-    return _generate(joined, tokenizer, model, 160, 70)
+    if _n_tokens(joined, tokenizer) <= SUM_MAX_TOKENS - 2:
+        return _generate(joined, tokenizer, model, 160, 70)
+    # Partials still exceed the input limit (very long documents): recurse.
+    # Each round shrinks the text ~4x (<=110 output tokens per ~512 in), so
+    # this terminates in a few rounds.
+    return summarize_document(joined, tokenizer, model)
 
 
 # ── Pipeline logic ────────────────────────────────────────────────────────────

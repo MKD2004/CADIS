@@ -62,7 +62,9 @@ export default function QAPage() {
     const raw = localStorage.getItem("cadis_result")
     if (!raw) { router.push("/launch"); return }
     setData(JSON.parse(raw).qa)
-    setDocument(localStorage.getItem("cadis_document") ?? "")
+    // Trim to match the text the backend analysed (also covers results
+    // cached before the launch page started trimming).
+    setDocument((localStorage.getItem("cadis_document") ?? "").trim())
   }, [router])
 
   const handleAsk = async () => {

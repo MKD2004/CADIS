@@ -233,12 +233,14 @@ export default function LaunchPage() {
     : !!selectedSample
 
   const handleRun = async () => {
-    const doc = mode === "upload"
+    // Trim here: the backend strips the text before analysing it, so every
+    // char offset it returns (QA highlights) is relative to the trimmed text.
+    const doc = (mode === "upload"
       ? fileContent
       : mode === "paste"
       ? text
-      : SAMPLES.find(s => s.id === selectedSample)?.text ?? ""
-    if (!doc.trim()) return
+      : SAMPLES.find(s => s.id === selectedSample)?.text ?? "").trim()
+    if (!doc) return
 
     setError("")
     setLoading(true)
