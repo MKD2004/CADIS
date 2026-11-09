@@ -9,7 +9,7 @@ by timing the two things a request can pay for:
     warm request = inference only              (every request after)
 
 What this does NOT measure: the model *download*. On a fresh HuggingFace Spaces
-container the weights (~1.5 GB) are fetched over the network on first use,
+container the weights (~2.1 GB) are fetched over the network on first use,
 because the Dockerfile deliberately skips pre-downloading them (doing so blew
 past the Spaces build timeout). That download dominates a true cold start in
 deployment and is bandwidth-dependent, so it is not reproducible as a number —

@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white)
 ![HuggingFace](https://img.shields.io/badge/HuggingFace-Spaces-FFD21E?style=flat-square&logo=huggingface&logoColor=black)
 ![Vercel](https://img.shields.io/badge/Vercel-Frontend-000000?style=flat-square&logo=vercel&logoColor=white)
 
@@ -18,7 +18,7 @@ through each stage in an interactive Next.js dashboard.
 ```mermaid
 flowchart LR
     subgraph Client ["Frontend — Vercel"]
-        UI["Next.js 15 / React 19<br/>Tailwind / Framer Motion"]
+        UI["Next.js 16 / React 19<br/>Tailwind / Framer Motion"]
     end
 
     subgraph ML ["ML Backend — HuggingFace Spaces (Docker)"]
@@ -53,8 +53,8 @@ restricted to the origins listed in `api_server.py`.
 
 1. **Upload** — the user drops a `.pdf` / `.docx` / `.txt` file (or pastes text, or picks
    a bundled sample) on `/launch`
-2. **Extract** — `POST /api/extract` parses the file with `pypdf` / `python-docx` and
-   returns plain text
+2. **Extract** — `POST /api/extract` parses `.pdf` / `.docx` files with `pypdf` /
+   `python-docx` and returns plain text (`.txt` files are read directly in the browser)
 3. **Process** — `POST /api/process` runs all six modules in one call and returns a single
    JSON payload
 4. **Explore** — the result is cached in `localStorage` and rendered across six pages under
@@ -70,8 +70,8 @@ restricted to the origins listed in `api_server.py`.
 |---|--------|-------|------------------|
 | 1 | **Preprocessing** | spaCy `en_core_web_sm` | Tokens with lemma/POS/dependency, sentence split, corpus stats |
 | 2 | **Embeddings** | `all-MiniLM-L6-v2` | 384-d sentence vectors, cosine similarity matrix, most-similar pairs |
-| 3 | **NER + IE** | `dslim/bert-base-NER` + spaCy | Person/Org/Location/Date/Money entities, subject-verb-object relations |
-| 4 | **Ambiguity** | MiniLM + spaCy parse | PP-attachment and anaphoric ambiguities with a resolved candidate |
+| 3 | **NER + IE** | `dslim/bert-base-NER` + spaCy | Person/Org/Location/Misc entities (BERT) plus Date and numeric entities (spaCy — the "Money" bucket also holds cardinals and percentages), subject-verb-object relations |
+| 4 | **Ambiguity** | MiniLM + spaCy parse | PP-attachment and anaphoric ambiguities (at most one per sentence), each with a resolved candidate |
 | 5 | **QA Engine** | `deepset/roberta-base-squad2` | Extractive answer spans with character offsets and confidence |
 | 6 | **Summary** | `sshleifer/distilbart-cnn-12-6` | Abstractive executive summary, key sentences, date-anchored timeline |
 
@@ -84,25 +84,35 @@ hallucinate. Getting a *correct* span requires more than an argmax:
   question and the top 6 go to the model. Long documents stay answerable without running
   the QA model over every window. Passages are embedded **once per request**, not once per
   question — only the question vector changes.
-  (Retrieval is a no-op below ~900 words, where every passage fits in the top 6 anyway.)
+  (Retrieval is a no-op up to 950 words, where the document splits into at most 6
+  passages anyway.)
 - Retrieved passages that are adjacent in the document are **merged into contiguous blocks
-  before tokenization**. This matters: a lone 200-word passage is only ~253 tokens, which
-  never overflows a 384-token window, so feeding passages individually meant the stride
-  did nothing. Merged blocks run 400–650 tokens and genuinely tile into multiple windows
-  at a 128-token stride, so an answer straddling a passage seam is recoverable.
+  before tokenization**. A lone 200-word passage is only ~215–255 tokens, which never
+  overflows a 384-token window, so feeding passages individually meant the stride did
+  nothing. Once adjacent passages are merged (two → ~375 tokens, three → ~535, six →
+  ~1000), the block tiles into multiple windows at a 128-token stride, so an answer
+  straddling a passage seam is recoverable. Retrieved passages that are *not* adjacent
+  stay separate single-window blocks — there is no seam between them to straddle.
 - Candidate spans are restricted to *context* tokens, must satisfy `end >= start`, and are
   capped at 40 tokens.
 - SQuAD2 models emit a no-answer score at the `[CLS]` position. A span is only returned if
   it outscores that null; otherwise the answer is empty. Confidence is the sigmoid of that
   margin.
 - Answers are sliced from the original text by character offset, so casing and punctuation
-  are preserved and the frontend can highlight the exact source region.
+  are preserved and the frontend can highlight the exact source region. Offsets are
+  relative to the text as sent, including any leading whitespace.
 
 ### How summarization works
 
-DistilBART accepts ~1024 tokens (roughly 750 words). Longer documents are split into
-evenly-sized sentence-aligned chunks, each chunk is summarized, near-duplicate sentences
-are dropped, and the result is condensed once more into the executive summary.
+DistilBART accepts 1024 tokens (roughly 750 words) and silently truncates anything longer,
+so every input it sees is sized to fit. Documents up to 400 words are summarized in one
+pass. Longer documents are split into evenly-sized, sentence-aligned chunks of ~512
+tokens (sentences with no punctuation, common in PDF extraction, are broken into word
+windows). Every sentence goes into exactly one chunk, so the whole document is covered.
+Each chunk is summarized, near-duplicate sentences are dropped, and the partials are
+condensed into the executive summary — recursively, if the partials themselves exceed
+1024 tokens. There is no cap on the number of chunks, so summarization time grows
+linearly with document length (a 6,000-word document takes ~50 s on a CPU laptop).
 
 ---
 
@@ -115,20 +125,31 @@ worker process and are reused. `benchmark.py` measures what that buys:
 python benchmark.py
 ```
 
-Measured on a CPU-only laptop with weights already in `~/.cache/huggingface`:
+One run on a CPU-only Windows laptop with weights already in `~/.cache/huggingface`
+(`python benchmark.py 100 400`):
 
 | Document | Warm request (inference) | Cold request (load + inference) | Ratio |
 |---|---|---|---|
-| 100 words | 7.9 s | 30.5 s | **3.8×** |
-| 400 words | 16.8 s | 39.4 s | **2.3×** |
+| 100 words | 3.3 s | 38.8 s | **11.8×** |
+| 400 words | 11.3 s | 46.8 s | **4.2×** |
 
-Model load is ~22–30 s and is paid exactly once; an `lru_cache` hit is ~6 µs. The
-cold/warm ratio is therefore **highest on short documents**, where load dominates, and
-falls as inference grows — it is a property of the document, not a single headline number.
+Absolute numbers vary a lot between machines and runs (the figures previously quoted
+here were 7.9 s / 16.8 s warm with ~23 s load), so treat them as illustrative. Two things to
+know about the method:
+
+- The *cold* column is computed, not measured: it is the one-time load cost plus the warm
+  inference time. That load cost (35.5 s in the run above) includes importing
+  torch/transformers as well as loading weights from disk.
+- Load is paid exactly once per worker; afterwards all five `lru_cache` lookups together
+  take tens of microseconds.
+
+What holds across runs is the shape: the cold/warm ratio is **highest on short documents**,
+where load dominates, and falls as inference grows — it is a property of the document,
+not a single headline number.
 
 A true cold start *in deployment* is larger than any of these, because the Dockerfile
 deliberately does not pre-download weights (it blew past the HF Spaces build timeout), so
-the first request after a container wake also pays a ~1.5 GB network download. That cost
+the first request after a container wake also pays a ~2.1 GB network download. That cost
 is bandwidth-dependent and not reproducible as a fixed figure, which is why it is not
 quoted here.
 
@@ -139,7 +160,7 @@ quoted here.
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 20.9+ (required by Next.js 16)
 
 ### 1. ML Backend
 
@@ -151,7 +172,7 @@ python -m spacy download en_core_web_sm
 uvicorn api_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Models download from HuggingFace on first use (~1.5 GB total) and are cached afterwards.
+Models download from HuggingFace on first use (~2.1 GB total, most of it DistilBART) and are cached afterwards.
 
 ### 2. Frontend
 
@@ -196,15 +217,14 @@ cadis_project/
 ├── requirements.txt        # Python dependencies
 ├── benchmark.py            # Cold-vs-warm latency measurement for model caching
 ├── hf_README.md            # HF Space card metadata
-├── client/                 # Next.js 15 frontend
+├── client/                 # Next.js 16 frontend
 │   ├── app/
 │   │   ├── page.tsx        # Landing page
 │   │   ├── launch/         # Upload / paste / sample + pipeline runner
 │   │   └── pipeline/       # One page per module
 │   ├── components/         # Landing sections + shadcn/ui primitives
-│   └── lib/nlp-utils.ts    # Client-side helpers
-├── data/                   # Sample datasets
-└── context.md              # Working notes, file map, project conventions
+│   └── lib/utils.ts        # Tailwind className helper (cn)
+└── data/                   # Sample datasets
 ```
 
 ---
