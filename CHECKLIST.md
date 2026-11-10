@@ -12,9 +12,9 @@ update the status table in ARCHITECTURE_V2 §11.
 
 ---
 
-## Phase 0 — Foundation  *(effort S–M)* — **almost done**
+## Phase 0 — Foundation  *(effort S–M)* — **done** (2026-11-10)
 
-Last checked: 2026-11-10. Committed as `4c57fab` → `a91a548` (not pushed yet).
+Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded in the commit after it. CI green on GitHub.
 
 ### Tasks
 
@@ -35,27 +35,24 @@ Last checked: 2026-11-10. Committed as `4c57fab` → `a91a548` (not pushed yet).
   - [x] Slow real-model tests behind `-m slow` (7 tests)
   - [x] Chunking covers every word · QA offsets match the text · summary chunks fit the model · endpoints return the right shape
   - [ ] `tests/integration/` tier (not needed until Phase 1 adds SQLite/ChromaDB)
-- [~] **0.4 First evaluation set** (`data/eval/`)
+- [x] **0.4 First evaluation set** (`data/eval/`)
   - [x] `backend/scripts/eval.py` — recall@k, MRR, EM/F1 per type, abstention, latency p50/p95
-  - [x] Baseline saved: `data/eval/results/phase0.json`
-  - [x] 46 questions (target 40–60), including numeric and cross-document ones that fail today
-  - [ ] **5–10 documents** — only 4 so far (`climate`, `legal`, `medical`, `tech`)
-  - [ ] **Roughly equal numbers per question type** — today: single 30, numeric 6, unanswerable 5, cross-document 2, comparison 2, cross-passage 1
-  - [ ] **Larger collection** — the 4 documents make only 7 passages, so recall@6 = 1.0 is guaranteed and the retrieval baseline cannot show improvement in Phase 2
+  - [x] 8 documents (~3,800 words, 28 passages): `climate`, `energy`, `legal`, `supply`, `medical`, `trial2`, `tech`, `operations` — pairs of related documents so cross-document and comparison questions exist
+  - [x] 60 questions, 10 per type: single, numeric (incl. the pens example), cross-passage, cross-document, comparison, unanswerable
+  - [x] Baseline saved: `data/eval/results/phase0.json` — recall@1 0.34 · recall@3 0.74 · recall@6 0.94 · MRR 0.86 · EM single 0.90, cross-passage 0.70, numeric 0.00, cross-document 0.20, comparison 0.20 · abstention 0.70
 - [x] **0.5 Fix the problems from CADIS V2 §2.3**
   - [x] NER runs window by window (sentence-aligned, ≤ 400 tokens) and shifts offsets back (`analysis/ner.py`)
   - [x] Passages sized in embedding-model tokens and capped below MiniLM's 256 (`passage_tokens = 220`)
   - [x] Passage embeddings cached across `/api/process` → `/api/qa-ask` (`passage_cache`, LRU of 8 documents)
   - [x] No full n × n matrix: matrix capped at 20 sentences; top pairs found blockwise over all sentences
   - [x] PCA for the 2-D plot (backend `pca_2d` + `client/app/pipeline/embeddings/page.tsx`)
-- [~] **0.6 CI** (GitHub Actions)
+- [x] **0.6 CI** (GitHub Actions)
   - [x] `.github/workflows/ci.yml`: backend unit tests, `tsc --noEmit`, `npm run build`, pip-audit / npm audit (report only)
-  - [x] Committed (`a91a548`)
-  - [ ] **Pushed, and the first run is green on GitHub**
+  - [x] Pushed; first run on `68382dc` succeeded
 
 ### Done when
 
-- [ ] Tests pass **in CI** — committed but not pushed, so the workflow has not run yet
+- [x] Tests pass in CI (run on `68382dc`: success)
 - [x] The evaluation script prints a baseline score for today's system
 - [x] A long document's NER finds names on the last page — slow test `test_ner_reads_the_whole_long_document` passes locally with the real models (all 7 slow tests pass, 2026-11-10)
 
@@ -66,7 +63,7 @@ Last checked: 2026-11-10. Committed as `4c57fab` → `a91a548` (not pushed yet).
 - [x] Update ARCHITECTURE_V2 §11 status table
 - [x] Update `README.md` (start command, benchmark path, settings, project tree)
 - [x] Document `requirements-dev.txt` and how to run tests and eval (README §3)
-- [ ] `git push` and check the CI run
+- [x] `git push` and check the CI run
 
 ---
 
@@ -148,6 +145,8 @@ Last checked: 2026-11-10. Committed as `4c57fab` → `a91a548` (not pushed yet).
 - [ ] **2.6 Diversity** — MMR or per-document limit
 - [ ] Small-to-big expansion with neighbour chunks (`retrieval/expand.py`)
 - [ ] **2.7 Use new retrieval in extractive QA first**, to measure retrieval gain alone
+- [ ] Add recall@8 to `eval.py` (`KS` is 1/3/6 today; the done-when below uses recall@8)
+- [ ] Grow the eval collection toward the ~10,000-chunk latency target (e.g. add long PDFs once Phase 1 ingests them)
 - [ ] Run `eval.py`, save `results/phase2.json`
 
 ### Done when

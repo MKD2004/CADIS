@@ -1,0 +1,39 @@
+Northern Grid Authority - Annual Renewable Energy Report 2024
+
+Foreword
+
+This report describes the progress of the Northern Grid Authority toward its clean electricity goals during 2024. It was prepared by the Authority's planning division under the direction of Chief Engineer Tomas Lindqvist and approved by the board on February 18, 2025. The report should be read alongside the IPCC assessment released in Geneva in October 2024, which the board has adopted as the scientific basis for its long-term plans.
+
+Targets
+
+The Northern Grid Authority aims to source 70 percent of its electricity from renewable energy by 2030 and 95 percent by 2040. It has also committed to cut emissions from the power sector by 60 percent by 2030, compared with 2019 levels. In 2024, renewable sources supplied 47 percent of the electricity consumed in the region, up from 41 percent in 2023.
+
+Generation
+
+Total electricity consumption in the region was 52 terawatt-hours in 2024. Wind generation reached 18.4 terawatt-hours, making wind the largest single source of electricity in the region for the first time. Solar generation reached 6.1 terawatt-hours. Hydroelectric plants contributed most of the remaining renewable supply. Gas-fired plants supplied 38 percent of electricity, and the last coal-fired unit at the Brennan Point station was closed in September 2024.
+
+Installed solar capacity grew from 3.2 gigawatts at the end of 2023 to 4.7 gigawatts at the end of 2024. Most of the new capacity came from three large solar farms in the southern districts and from rooftop systems installed under the Authority's household incentive program, which supported more than 21,000 homes during the year. Two new offshore wind projects received final approval and are expected to add 1.4 gigawatts of capacity by 2027.
+
+Storage
+
+The Authority commissioned its first large battery storage system at Harlow Ridge in May 2024. The system can store 1,100 megawatt-hours of energy and deliver up to 275 megawatts of power for four hours. It charges when wind and solar output is high and discharges in the evening, when demand is highest. A second storage project, using pumped hydro at Corrie Lake, is in the design phase.
+
+Extreme Weather
+
+The region experienced its most severe heatwave on record in July 2024. On July 17, electricity demand peaked at 9,850 megawatts, the highest level ever recorded on the network. Rolling outages were avoided because the battery at Harlow Ridge discharged at full power for three hours during the evening peak, and because large industrial users agreed to reduce their consumption under the demand response program. The board has asked the planning division to assume that heatwaves of this strength will occur every few years when it plans new capacity.
+
+Emissions
+
+Emissions from the power sector fell 21 percent compared with 2019, mainly because of the closure of coal units and the growth of wind generation. Average emissions per unit of electricity fell to 210 grams of carbon dioxide per kilowatt-hour.
+
+Grid Investment
+
+The Authority invested $2.3 billion in the network during 2024, including new transmission lines to connect the southern solar farms and upgrades to substations near the major cities. The largest single project was the 340-kilometre Northern Link transmission line, which was completed in November 2024 and allows wind power from the coast to reach inland cities.
+
+Customers
+
+Average household electricity bills rose 3 percent in 2024, less than the rate of inflation. Customer complaints fell by 12 percent. The Authority connected 48,000 new customers during the year, most of them in new housing developments around the capital.
+
+Outlook
+
+For 2025, the Authority expects renewable sources to supply about 52 percent of electricity. The main risks to the plan are delays in connecting new projects to the grid, rising equipment costs, and lower-than-expected wind output in calm years.

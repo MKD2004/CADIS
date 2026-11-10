@@ -1,7 +1,7 @@
 {
  "name": "phase0",
- "git": "de42622+uncommitted",
- "date": "2026-11-09",
+ "git": "68382dc+uncommitted",
+ "date": "2026-11-10",
  "models": {
   "embedding": "all-MiniLM-L6-v2",
   "qa": "deepset/roberta-base-squad2"
@@ -15,56 +15,56 @@
  },
  "summary": {
   "retrieval": {
-   "recall@1": 0.78,
-   "recall@3": 0.976,
-   "recall@6": 1.0,
-   "mrr": 0.923,
-   "passages_in_collection": 7
+   "recall@1": 0.34,
+   "recall@3": 0.74,
+   "recall@6": 0.94,
+   "mrr": 0.863,
+   "passages_in_collection": 28
   },
   "answers": {
    "comparison": {
-    "n": 2,
-    "em": 0.5,
-    "f1": 0.5,
+    "n": 10,
+    "em": 0.2,
+    "f1": 0.218,
     "no_answer": 0.5
    },
    "cross_document": {
-    "n": 2,
-    "em": 0.0,
-    "f1": 0.0,
+    "n": 10,
+    "em": 0.2,
+    "f1": 0.2,
     "no_answer": 0.5
    },
    "cross_passage": {
-    "n": 1,
-    "em": 1.0,
-    "f1": 1.0,
-    "no_answer": 0.0
+    "n": 10,
+    "em": 0.7,
+    "f1": 0.7,
+    "no_answer": 0.2
    },
    "numeric": {
-    "n": 6,
+    "n": 10,
     "em": 0.0,
-    "f1": 0.25,
-    "no_answer": 0.167
+    "f1": 0.2,
+    "no_answer": 0.2
    },
    "single": {
-    "n": 30,
-    "em": 0.967,
-    "f1": 0.967,
-    "no_answer": 0.033
+    "n": 10,
+    "em": 0.9,
+    "f1": 0.9,
+    "no_answer": 0.1
    },
    "unanswerable": {
-    "n": 5,
-    "correct_abstain": 0.8
+    "n": 10,
+    "correct_abstain": 0.7
    },
    "all_answerable": {
-    "n": 41,
-    "em": 0.756,
-    "f1": 0.793
+    "n": 50,
+    "em": 0.4,
+    "f1": 0.444
    }
   },
   "latency": {
-   "median_ms": 820.1,
-   "p95_ms": 999.4
+   "median_ms": 1666.8,
+   "p95_ms": 2035.6
   }
  },
  "questions": [
@@ -73,348 +73,24 @@
    "type": "single",
    "question": "How much will Apple pay to acquire NeuralBase?",
    "prediction": "$2.5 billion",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 827.3
-  },
-  {
-   "id": "t02",
-   "type": "single",
-   "question": "Who confirmed the deal?",
-   "prediction": "CEO Tim Cook",
-   "confidence": 0.9996,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 2,
-   "all_evidence_rank": 2,
-   "ms": 805.3
-  },
-  {
-   "id": "t03",
-   "type": "single",
-   "question": "In which city was the press conference about the NeuralBase deal held?",
-   "prediction": "San Francisco",
-   "confidence": 0.9997,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 794.4
-  },
-  {
-   "id": "t04",
-   "type": "single",
-   "question": "Who is Apple's CFO?",
-   "prediction": "Sarah Johnson",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 798.9
-  },
-  {
-   "id": "t05",
-   "type": "single",
-   "question": "Who founded NeuralBase?",
-   "prediction": "Dr. Elena Marsh",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 817.8
-  },
-  {
-   "id": "t06",
-   "type": "single",
-   "question": "How much did NeuralBase raise in its Series C funding?",
-   "prediction": "$400 million",
    "confidence": 0.9999,
    "em": 1.0,
    "f1": 1.0,
    "first_rank": 1,
    "all_evidence_rank": 1,
-   "ms": 787.2
-  },
-  {
-   "id": "t07",
-   "type": "single",
-   "question": "Which firm led NeuralBase's Series C round?",
-   "prediction": "Sequoia Capital",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 794.6
-  },
-  {
-   "id": "t08",
-   "type": "single",
-   "question": "What revenue multiple does the NeuralBase acquisition price reflect?",
-   "prediction": "12x",
-   "confidence": 0.9986,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 803.3
-  },
-  {
-   "id": "t09",
-   "type": "single",
-   "question": "When is the NeuralBase deal expected to close?",
-   "prediction": "March 2025",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 2,
-   "all_evidence_rank": 2,
-   "ms": 788.1
-  },
-  {
-   "id": "t10",
-   "type": "numeric",
-   "question": "How many years passed between NeuralBase's founding and the year its acquisition is expected to close?",
-   "prediction": "2025",
-   "confidence": 0.9948,
-   "em": 0.0,
-   "f1": 0.0,
-   "first_rank": 2,
-   "all_evidence_rank": 2,
-   "ms": 825.5
-  },
-  {
-   "id": "t11",
-   "type": "numeric",
-   "question": "What is the combined amount of Apple's acquisition price for NeuralBase and NeuralBase's Series C funding?",
-   "prediction": "$2.5 billion",
-   "confidence": 0.9994,
-   "em": 0.0,
-   "f1": 0.5,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 840.8
-  },
-  {
-   "id": "t12",
-   "type": "cross_passage",
-   "question": "Who is the CFO of the company that is acquiring NeuralBase?",
-   "prediction": "Sarah Johnson",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 800.6
-  },
-  {
-   "id": "c01",
-   "type": "single",
-   "question": "How much have global average temperatures risen above pre-industrial levels according to the IPCC assessment?",
-   "prediction": "1.4 degrees Celsius",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 822.9
-  },
-  {
-   "id": "c02",
-   "type": "single",
-   "question": "What carbon dioxide concentration was reached in May 2024?",
-   "prediction": "424 parts per million",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 840.3
-  },
-  {
-   "id": "c03",
-   "type": "single",
-   "question": "Which year was the hottest since records began?",
-   "prediction": "2023",
-   "confidence": 0.8023,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 820.1
-  },
-  {
-   "id": "c04",
-   "type": "single",
-   "question": "Who is the lead author from the Indian Institute of Tropical Meteorology?",
-   "prediction": "Dr. Priya Nair",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 818.4
-  },
-  {
-   "id": "c05",
-   "type": "single",
-   "question": "How many people were displaced by the floods in Pakistan?",
-   "prediction": "8 million",
-   "confidence": 0.9998,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 801.8
-  },
-  {
-   "id": "c06",
-   "type": "single",
-   "question": "How much faster is the Arctic warming than the global average?",
-   "prediction": "four times",
-   "confidence": 0.9998,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 820.1
-  },
-  {
-   "id": "c07",
-   "type": "single",
-   "question": "How many hectares burned in Canada's wildfires in summer 2023?",
-   "prediction": "900,000",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 1022.7
-  },
-  {
-   "id": "c08",
-   "type": "numeric",
-   "question": "By how many percentage points does the European Union's 2030 emissions-cut pledge exceed the reduction the panel recommends?",
-   "prediction": "55 percent",
-   "confidence": 0.9998,
-   "em": 0.0,
-   "f1": 0.5,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 993.6
+   "ms": 2050.7
   },
   {
    "id": "m01",
    "type": "single",
    "question": "How many patients were enrolled in the VX-7890 trial?",
    "prediction": "1,240",
-   "confidence": 0.9999,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 813.9
-  },
-  {
-   "id": "m02",
-   "type": "single",
-   "question": "How many clinical sites took part in the VX-7890 trial?",
-   "prediction": "38",
-   "confidence": 0.9998,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 818.8
-  },
-  {
-   "id": "m03",
-   "type": "single",
-   "question": "What overall response rate did patients receiving VX-7890 show?",
-   "prediction": "73 percent",
    "confidence": 1.0,
    "em": 1.0,
    "f1": 1.0,
    "first_rank": 1,
    "all_evidence_rank": 1,
-   "ms": 881.4
-  },
-  {
-   "id": "m04",
-   "type": "single",
-   "question": "Who was the principal investigator of the VX-7890 trial?",
-   "prediction": "Dr. Michael Chen",
-   "confidence": 0.9995,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 2,
-   "all_evidence_rank": 2,
-   "ms": 845.0
-  },
-  {
-   "id": "m05",
-   "type": "single",
-   "question": "What was the median progression-free survival in the VX-7890 treatment arm?",
-   "prediction": "14.2 months",
-   "confidence": 0.9999,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 830.1
-  },
-  {
-   "id": "m06",
-   "type": "single",
-   "question": "Which company submitted the Biologics License Application for VX-7890?",
-   "prediction": "Vertex Oncology",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 808.5
-  },
-  {
-   "id": "m07",
-   "type": "single",
-   "question": "When did the FDA grant VX-7890 Breakthrough Therapy designation?",
-   "prediction": "February 2023",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 815.9
-  },
-  {
-   "id": "m08",
-   "type": "numeric",
-   "question": "How many months longer was median progression-free survival in the VX-7890 arm than in the control arm?",
-   "prediction": "14.2",
-   "confidence": 0.9792,
-   "em": 0.0,
-   "f1": 0.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 824.0
-  },
-  {
-   "id": "m09",
-   "type": "numeric",
-   "question": "By how many percentage points did the VX-7890 response rate exceed the control group's?",
-   "prediction": "28 percent",
-   "confidence": 0.5813,
-   "em": 0.0,
-   "f1": 0.5,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 999.4
+   "ms": 903.2
   },
   {
    "id": "l01",
@@ -426,79 +102,151 @@
    "f1": 0.0,
    "first_rank": 1,
    "all_evidence_rank": 1,
-   "ms": 816.2
-  },
-  {
-   "id": "l02",
-   "type": "single",
-   "question": "What interest rate can the Service Provider charge on late payments?",
-   "prediction": "1.5 percent per month",
-   "confidence": 0.9994,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 807.6
-  },
-  {
-   "id": "l03",
-   "type": "single",
-   "question": "How long is the initial term of the Master Service Agreement?",
-   "prediction": "twenty-four months",
-   "confidence": 0.998,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 823.9
-  },
-  {
-   "id": "l04",
-   "type": "single",
-   "question": "When does the initial term of the agreement commence?",
-   "prediction": "February 1, 2025",
-   "confidence": 1.0,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 1,
-   "all_evidence_rank": 1,
-   "ms": 819.4
+   "ms": 1094.9
   },
   {
    "id": "l05",
    "type": "single",
    "question": "Which state's laws govern the Master Service Agreement?",
    "prediction": "New York",
-   "confidence": 0.7516,
+   "confidence": 0.8026,
    "em": 1.0,
    "f1": 1.0,
-   "first_rank": 3,
-   "all_evidence_rank": 3,
-   "ms": 841.9
+   "first_rank": 2,
+   "all_evidence_rank": 2,
+   "ms": 925.0
   },
   {
-   "id": "l06",
+   "id": "s01",
    "type": "single",
-   "question": "How much written notice is needed to terminate the agreement for cause?",
-   "prediction": "thirty days",
-   "confidence": 0.8228,
+   "question": "What is the price per sensor module under the Supply Agreement?",
+   "prediction": "$42 per unit",
+   "confidence": 0.9882,
    "em": 1.0,
    "f1": 1.0,
    "first_rank": 1,
    "all_evidence_rank": 1,
-   "ms": 838.0
+   "ms": 1197.0
   },
   {
-   "id": "l07",
+   "id": "s02",
    "type": "single",
-   "question": "For how long after termination may the Client not hire the Service Provider's employees?",
-   "prediction": "twelve months",
-   "confidence": 0.995,
+   "question": "Which jurisdiction's laws govern the Supply Agreement?",
+   "prediction": "Province of Ontario",
+   "confidence": 0.9405,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 6,
+   "all_evidence_rank": 6,
+   "ms": 1165.6
+  },
+  {
+   "id": "s03",
+   "type": "single",
+   "question": "What platform availability did DataFlow achieve in the first quarter of 2025?",
+   "prediction": "99.95 percent",
+   "confidence": 0.9983,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 2,
+   "all_evidence_rank": 2,
+   "ms": 1059.4
+  },
+  {
+   "id": "s04",
+   "type": "single",
+   "question": "Which journal published the RX-210 trial results?",
+   "prediction": "The Lancet Oncology",
+   "confidence": 1.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 2,
+   "all_evidence_rank": 2,
+   "ms": 857.9
+  },
+  {
+   "id": "s05",
+   "type": "single",
+   "question": "How much wind generation did the Northern Grid region produce in 2024?",
+   "prediction": "18.4 terawatt-hours",
+   "confidence": 0.9999,
    "em": 1.0,
    "f1": 1.0,
    "first_rank": 1,
    "all_evidence_rank": 1,
-   "ms": 847.2
+   "ms": 856.9
+  },
+  {
+   "id": "s06",
+   "type": "single",
+   "question": "What share of its electricity does the Northern Grid Authority aim to source from renewable energy by 2030?",
+   "prediction": "70 percent",
+   "confidence": 1.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1060.1
+  },
+  {
+   "id": "t10",
+   "type": "numeric",
+   "question": "How many years passed between NeuralBase's founding and the year its acquisition is expected to close?",
+   "prediction": "2025",
+   "confidence": 0.8612,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1092.9
+  },
+  {
+   "id": "t11",
+   "type": "numeric",
+   "question": "What is the combined amount of Apple's acquisition price for NeuralBase and NeuralBase's Series C funding?",
+   "prediction": "$2.5 billion",
+   "confidence": 0.9507,
+   "em": 0.0,
+   "f1": 0.5,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1290.3
+  },
+  {
+   "id": "c08",
+   "type": "numeric",
+   "question": "By how many percentage points does the European Union's 2030 emissions-cut pledge exceed the reduction the panel recommends?",
+   "prediction": "55 percent",
+   "confidence": 0.9984,
+   "em": 0.0,
+   "f1": 0.5,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1088.0
+  },
+  {
+   "id": "m08",
+   "type": "numeric",
+   "question": "How many months longer was median progression-free survival in the VX-7890 arm than in the control arm?",
+   "prediction": "14.2",
+   "confidence": 0.9853,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 882.1
+  },
+  {
+   "id": "m09",
+   "type": "numeric",
+   "question": "By how many percentage points did the VX-7890 response rate exceed the control group's?",
+   "prediction": "28 percent",
+   "confidence": 0.7392,
+   "em": 0.0,
+   "f1": 0.5,
+   "first_rank": 2,
+   "all_evidence_rank": 2,
+   "ms": 1089.4
   },
   {
    "id": "l08",
@@ -510,43 +258,187 @@
    "f1": 0.0,
    "first_rank": 1,
    "all_evidence_rank": 1,
-   "ms": 826.1
+   "ms": 1317.9
+  },
+  {
+   "id": "n01",
+   "type": "numeric",
+   "question": "How many pens did the San Francisco supply room receive in total in January and February?",
+   "prediction": "120",
+   "confidence": 0.9985,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1074.8
+  },
+  {
+   "id": "n02",
+   "type": "numeric",
+   "question": "What is the minimum value of sensor modules Meridian must order from Kestrel each quarter?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1098.0
+  },
+  {
+   "id": "n03",
+   "type": "numeric",
+   "question": "How many people did DataFlow employ across its three offices at the end of the first quarter of 2025?",
+   "prediction": "145",
+   "confidence": 0.872,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1147.5
+  },
+  {
+   "id": "n04",
+   "type": "numeric",
+   "question": "By how many gigawatts did the Northern Grid region's installed solar capacity grow during 2024?",
+   "prediction": "4.7 gigawatts",
+   "confidence": 0.9999,
+   "em": 0.0,
+   "f1": 0.5,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1132.0
+  },
+  {
+   "id": "t12",
+   "type": "cross_passage",
+   "question": "Who is the CFO of the company that is acquiring NeuralBase?",
+   "prediction": "Sarah Johnson",
+   "confidence": 1.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1265.6
+  },
+  {
+   "id": "p01",
+   "type": "cross_passage",
+   "question": "Who is the quality manager at the company that supplies sensor modules to Meridian?",
+   "prediction": "Daniel Whitford",
+   "confidence": 1.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 5,
+   "ms": 1351.6
+  },
+  {
+   "id": "p02",
+   "type": "cross_passage",
+   "question": "Who leads the DataFlow office whose lease expires on June 30, 2026?",
+   "prediction": "Marcus Bell",
+   "confidence": 0.5525,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 2,
+   "all_evidence_rank": 3,
+   "ms": 1790.0
+  },
+  {
+   "id": "p03",
+   "type": "cross_passage",
+   "question": "To which cloud region were the workloads of DataFlow's largest client moved?",
+   "prediction": "Oregon",
+   "confidence": 0.9982,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 3,
+   "ms": 1712.1
+  },
+  {
+   "id": "p04",
+   "type": "cross_passage",
+   "question": "At which cancer centre does the leader of the RX-210 trial head the thoracic oncology program?",
+   "prediction": "Princess Margaret Cancer Centre",
+   "confidence": 0.9999,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1693.0
+  },
+  {
+   "id": "p05",
+   "type": "cross_passage",
+   "question": "What percentage of patients had grade 3 or higher adverse events with the drug taken as a 200 mg tablet once daily?",
+   "prediction": "22",
+   "confidence": 0.9585,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1662.0
+  },
+  {
+   "id": "p06",
+   "type": "cross_passage",
+   "question": "Who directed the preparation of the report of the authority that commissioned the Harlow Ridge battery?",
+   "prediction": "Chief Engineer Tomas Lindqvist",
+   "confidence": 0.796,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 3,
+   "ms": 1802.4
+  },
+  {
+   "id": "p07",
+   "type": "cross_passage",
+   "question": "How much energy can the battery that helped avoid rolling outages during the July 2024 heatwave store?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1743.7
+  },
+  {
+   "id": "p08",
+   "type": "cross_passage",
+   "question": "What is the annual liability cap in the agreement whose initial term begins on April 1, 2025?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1931.3
+  },
+  {
+   "id": "p09",
+   "type": "cross_passage",
+   "question": "When does the company that developed RX-210 plan to begin its Phase III trial?",
+   "prediction": "January 2026",
+   "confidence": 0.9999,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 3,
+   "ms": 1420.8
   },
   {
    "id": "x01",
    "type": "cross_document",
    "question": "How many years after NeuralBase was founded did the FDA grant VX-7890 Breakthrough Therapy designation?",
    "prediction": "2023",
-   "confidence": 0.9814,
+   "confidence": 0.9694,
    "em": 0.0,
    "f1": 0.0,
    "first_rank": 1,
-   "all_evidence_rank": 3,
-   "ms": 798.7
-  },
-  {
-   "id": "x02",
-   "type": "comparison",
-   "question": "Which is larger: Apple's price for NeuralBase or the projected peak annual sales of VX-7890?",
-   "prediction": "$8 billion",
-   "confidence": 0.8658,
-   "em": 1.0,
-   "f1": 1.0,
-   "first_rank": 2,
    "all_evidence_rank": 2,
-   "ms": 827.7
-  },
-  {
-   "id": "x03",
-   "type": "comparison",
-   "question": "Which happened first: the start of patient enrollment in the VX-7890 trial or the floods in Pakistan?",
-   "prediction": "",
-   "confidence": 0.0,
-   "em": 0.0,
-   "f1": 0.0,
-   "first_rank": 1,
-   "all_evidence_rank": 3,
-   "ms": 1052.8
+   "ms": 1674.2
   },
   {
    "id": "x04",
@@ -557,20 +449,236 @@
    "em": 0.0,
    "f1": 0.0,
    "first_rank": 1,
+   "all_evidence_rank": 3,
+   "ms": 2002.5
+  },
+  {
+   "id": "d01",
+   "type": "cross_document",
+   "question": "Who is the Vice President of Operations at Meridian's service provider under the Master Service Agreement?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 2,
+   "all_evidence_rank": 9,
+   "ms": 1755.4
+  },
+  {
+   "id": "d02",
+   "type": "cross_document",
+   "question": "Which earlier trial was led by the expert who wrote the independent commentary on the RX-210 results?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 4,
+   "all_evidence_rank": 6,
+   "ms": 1719.1
+  },
+  {
+   "id": "d03",
+   "type": "cross_document",
+   "question": "What monthly retainer does DataFlow's largest client pay it?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
    "all_evidence_rank": 4,
-   "ms": 808.7
+   "ms": 1738.2
+  },
+  {
+   "id": "d04",
+   "type": "cross_document",
+   "question": "In which city is the principal place of business of the company that buys sensor modules from Kestrel Components?",
+   "prediction": "Toronto",
+   "confidence": 0.9023,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 9,
+   "ms": 2103.7
+  },
+  {
+   "id": "d05",
+   "type": "cross_document",
+   "question": "What carbon dioxide concentration was reached in the month the Harlow Ridge battery was commissioned?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 2,
+   "all_evidence_rank": 4,
+   "ms": 1782.3
+  },
+  {
+   "id": "d06",
+   "type": "cross_document",
+   "question": "Which firm led the Series C round of the startup whose model compression toolkit DataFlow piloted?",
+   "prediction": "Sequoia Capital",
+   "confidence": 0.9748,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1714.2
+  },
+  {
+   "id": "d07",
+   "type": "cross_document",
+   "question": "According to the assessment the Northern Grid Authority adopted as its scientific basis, how much have global average temperatures risen above pre-industrial levels?",
+   "prediction": "1.4 degrees Celsius",
+   "confidence": 0.9369,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1671.6
+  },
+  {
+   "id": "d08",
+   "type": "cross_document",
+   "question": "How many patients were enrolled in the trial of the drug Halden Therapeutics named as its main competitor?",
+   "prediction": "1,500",
+   "confidence": 0.7053,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 2,
+   "all_evidence_rank": 6,
+   "ms": 1675.5
+  },
+  {
+   "id": "x02",
+   "type": "comparison",
+   "question": "Which is larger: Apple's price for NeuralBase or the projected peak annual sales of VX-7890?",
+   "prediction": "12x",
+   "confidence": 0.7615,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1990.4
+  },
+  {
+   "id": "x03",
+   "type": "comparison",
+   "question": "Which happened first: the start of patient enrollment in the VX-7890 trial or the floods in Pakistan?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 4,
+   "all_evidence_rank": 11,
+   "ms": 1415.9
+  },
+  {
+   "id": "k01",
+   "type": "comparison",
+   "question": "Which contract requires a longer written notice period to terminate for cause: the Master Service Agreement or the Supply Agreement?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 4,
+   "ms": 1644.8
+  },
+  {
+   "id": "k02",
+   "type": "comparison",
+   "question": "Which contract allows a higher monthly interest rate on late payments: the Master Service Agreement or the Supply Agreement?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 3,
+   "ms": 1717.7
+  },
+  {
+   "id": "k03",
+   "type": "comparison",
+   "question": "Which contract has the longer initial term: the Master Service Agreement or the Supply Agreement?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 2,
+   "ms": 1679.1
+  },
+  {
+   "id": "k04",
+   "type": "comparison",
+   "question": "Which drug had the higher overall response rate: VX-7890 or RX-210?",
+   "prediction": "VX-7890",
+   "confidence": 0.9223,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 1,
+   "all_evidence_rank": 4,
+   "ms": 1669.5
+  },
+  {
+   "id": "k05",
+   "type": "comparison",
+   "question": "Which trial enrolled more patients: the VX-7890 trial or the RX-210 trial?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 3,
+   "ms": 1680.7
+  },
+  {
+   "id": "k06",
+   "type": "comparison",
+   "question": "Which drug had a lower rate of grade 3 or higher adverse events: VX-7890 or RX-210?",
+   "prediction": "RX-210",
+   "confidence": 0.876,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": 2,
+   "all_evidence_rank": 4,
+   "ms": 1765.1
+  },
+  {
+   "id": "k07",
+   "type": "comparison",
+   "question": "Which 2030 emissions cut is larger: the European Union's pledge or the Northern Grid Authority's power-sector commitment?",
+   "prediction": "The European Union pledged to cut emissions by 55 percent",
+   "confidence": 0.9618,
+   "em": 0.0,
+   "f1": 0.1818,
+   "first_rank": 1,
+   "all_evidence_rank": 5,
+   "ms": 1684.2
+  },
+  {
+   "id": "k08",
+   "type": "comparison",
+   "question": "Which DataFlow office had more employees at the end of the first quarter of 2025: Austin or Denver?",
+   "prediction": "Denver",
+   "confidence": 0.9782,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": 1,
+   "all_evidence_rank": 1,
+   "ms": 1664.1
   },
   {
    "id": "u01",
    "type": "unanswerable",
    "question": "Who is the CEO of NeuralBase?",
    "prediction": "Tim Cook",
-   "confidence": 0.9883,
+   "confidence": 0.9907,
    "em": 0.0,
    "f1": 0.0,
    "first_rank": null,
    "all_evidence_rank": null,
-   "ms": 817.0
+   "ms": 2028.5
   },
   {
    "id": "u02",
@@ -582,7 +690,7 @@
    "f1": 1.0,
    "first_rank": null,
    "all_evidence_rank": null,
-   "ms": 814.7
+   "ms": 1508.2
   },
   {
    "id": "u03",
@@ -594,7 +702,7 @@
    "f1": 1.0,
    "first_rank": null,
    "all_evidence_rank": null,
-   "ms": 831.9
+   "ms": 1561.0
   },
   {
    "id": "u04",
@@ -606,7 +714,7 @@
    "f1": 1.0,
    "first_rank": null,
    "all_evidence_rank": null,
-   "ms": 852.0
+   "ms": 1713.6
   },
   {
    "id": "u05",
@@ -618,7 +726,67 @@
    "f1": 1.0,
    "first_rank": null,
    "all_evidence_rank": null,
-   "ms": 851.1
+   "ms": 1411.8
+  },
+  {
+   "id": "u06",
+   "type": "unanswerable",
+   "question": "Who is the chief executive of Kestrel Components?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": null,
+   "all_evidence_rank": null,
+   "ms": 2035.6
+  },
+  {
+   "id": "u07",
+   "type": "unanswerable",
+   "question": "How much did the Harlow Ridge battery cost to build?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": null,
+   "all_evidence_rank": null,
+   "ms": 1716.5
+  },
+  {
+   "id": "u08",
+   "type": "unanswerable",
+   "question": "What was the median overall survival of patients taking RX-210?",
+   "prediction": "11.6 months",
+   "confidence": 0.9919,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": null,
+   "all_evidence_rank": null,
+   "ms": 1439.4
+  },
+  {
+   "id": "u09",
+   "type": "unanswerable",
+   "question": "How many employees does DataFlow plan to lay off in 2025?",
+   "prediction": "",
+   "confidence": 0.0,
+   "em": 1.0,
+   "f1": 1.0,
+   "first_rank": null,
+   "all_evidence_rank": null,
+   "ms": 1683.2
+  },
+  {
+   "id": "u10",
+   "type": "unanswerable",
+   "question": "When did the European Commission approve Apple's acquisition of NeuralBase?",
+   "prediction": "Monday",
+   "confidence": 0.9399,
+   "em": 0.0,
+   "f1": 0.0,
+   "first_rank": null,
+   "all_evidence_rank": null,
+   "ms": 1719.8
   }
  ]
 }

@@ -1,0 +1,39 @@
+DataFlow Analytics Inc. - Quarterly Operations Report, Q1 2025
+
+Prepared by Rachel Okafor, Vice President of Operations, and circulated to the executive team on April 7, 2025.
+
+Summary
+
+The first quarter of 2025 was the strongest in the company's history. Revenue for the quarter reached $14.6 million, up from $12.9 million in the fourth quarter of 2024. Growth came mainly from the start of the new managed infrastructure contract with Meridian Corporation, which went live on February 1 as planned. Meridian Corporation is now our largest client and accounted for 18 percent of revenue in the quarter. Gross margin improved to 61 percent as the data center migration reduced hosting costs.
+
+Platform Reliability
+
+Platform availability for the quarter was 99.95 percent, against a contractual target of 99.9 percent. There were two incidents that affected customers. The first, on January 22, was a storage controller failure in the old Nevada facility that caused 38 minutes of degraded performance. The second, on March 9, was a configuration error during the migration that delayed batch jobs for one hour and twelve minutes. Both incidents were reviewed in blameless post-mortems, and the configuration error has been addressed with an automated pre-deployment check.
+
+Data Center Migration
+
+The migration of all production workloads from the Nevada facility to the cloud provider's Oregon region was completed on March 21, 2025, nine days ahead of schedule. Meridian's workloads were moved to the Oregon region first, during the week of February 10, so that their contract could start on the new infrastructure. The Nevada facility lease ends on June 30, 2025, and the remaining hardware will be sold or recycled during May. We expect the migration to reduce annual hosting costs by about $1.1 million.
+
+Offices and Headcount
+
+At the end of the quarter, DataFlow employed 310 people at its San Francisco headquarters, 145 people at the Austin office and 62 people at the Denver office. The Austin office, led by site director Marcus Bell, hosts most of the customer support and solutions engineering teams. The Denver office hosts the security operations center, which now runs around the clock. We plan to hire 40 engineers in the second quarter, mainly for the machine learning platform team.
+
+Facilities
+
+The Austin office lease expires on June 30, 2026. The facilities team has started reviewing options for a larger space, because the current building cannot accommodate the planned growth of the support team. The Denver office moved to a new floor in the same building in January at no additional cost. In San Francisco, the fourth-floor kitchen renovation was completed in February.
+
+Office Supplies
+
+Spending on office supplies was within budget. The San Francisco supply room received 120 pens in January. A second shipment of 80 pens arrived in February, after the onboarding of new hires used more stock than expected. No further orders of pens are planned for the second quarter. Printer paper use fell by 30 percent compared with the previous quarter, which the facilities team attributes to the switch to electronic contract signing.
+
+Customers and Partnerships
+
+The company signed seven new customers in the quarter and lost one, for a net gain of six. Customer retention for the trailing twelve months stood at 94 percent. The engineering team ran a pilot of NeuralBase's model compression toolkit to reduce the cost of serving large models for customers. The pilot reduced inference memory use by 40 percent, but the partnership was paused after the announcement of NeuralBase's acquisition, until the new owner confirms its plans for the toolkit.
+
+Security and Compliance
+
+The SOC 2 Type II audit for the period ending December 31, 2024 was completed with no exceptions. Phishing simulation click rates fell from 9 percent to 4 percent after the January training program. All laptops now use hardware security keys for sign-in.
+
+Priorities for Q2 2025
+
+The main priorities for the second quarter are to complete the decommissioning of the Nevada facility, to hire the planned engineers, to begin the search for new Austin office space, and to prepare the first quarterly service review with Meridian Corporation, scheduled for May 15, 2025.

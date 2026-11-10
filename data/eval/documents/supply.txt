@@ -1,0 +1,63 @@
+SUPPLY AGREEMENT
+
+This Supply Agreement is made and entered into as of March 3, 2025, by and between Meridian Corporation, a Delaware corporation (hereinafter referred to as the Buyer), and Kestrel Components Ltd., an Ontario corporation with its registered office at 220 Front Street West, Toronto, Ontario M5V 3K2 (hereinafter referred to as the Supplier). The Buyer and the Supplier are each referred to as a Party and together as the Parties.
+
+1. Background
+
+The Supplier designs and manufactures industrial sensor modules used in temperature, pressure and vibration monitoring equipment. The Buyer integrates such modules into the monitoring systems it sells to manufacturing and logistics customers. The Parties wish to set out the terms on which the Supplier will manufacture and deliver sensor modules to the Buyer on a recurring basis.
+
+2. Products and Pricing
+
+The Supplier shall manufacture the KC-400 series sensor modules described in Schedule 1 in accordance with the specifications set out therein. The price for each module shall be $42 per unit, exclusive of applicable sales taxes and import duties. Prices shall remain fixed for the first twelve months of the Term and may thereafter be adjusted once per year by no more than the percentage change in the producer price index for electronic components published for the preceding calendar year. Any price adjustment must be notified to the Buyer in writing at least ninety days before it takes effect.
+
+3. Minimum Purchase Commitment
+
+The Buyer shall order a minimum of 15,000 modules per calendar quarter. If the Buyer orders fewer modules in any quarter, the shortfall may be carried forward to the following quarter once, after which the Buyer shall pay for the shortfall at the unit price then in effect. Orders in excess of 25,000 modules in a single quarter require the Supplier's written acceptance, which shall not be unreasonably withheld.
+
+4. Term
+
+The initial term of this Agreement shall commence on April 1, 2025, and continue for a period of thirty-six months (the Term). The Term shall renew automatically for successive periods of twelve months unless either Party gives written notice of non-renewal at least six months before the end of the then-current Term.
+
+5. Ordering and Delivery
+
+The Buyer shall issue purchase orders through the Supplier's electronic ordering portal. The Supplier shall deliver all modules to the Buyer's distribution warehouse at 4100 Alum Creek Drive, Columbus, Ohio within 21 days of accepting a purchase order. Title and risk of loss pass to the Buyer upon delivery to that warehouse. Each shipment shall include a certificate of conformity and a lot traceability report. If a delivery is more than seven days late, the Buyer may claim a credit equal to 1 percent of the value of the late shipment for each additional week of delay, up to a maximum of 10 percent.
+
+6. Quality and Inspection
+
+The Supplier shall maintain a quality management system certified to ISO 9001. The Supplier's quality manager, Daniel Whitford, shall act as the primary contact for all quality matters and shall attend a quarterly quality review with the Buyer's engineering team. The Buyer may inspect each shipment within ten business days of delivery. If the defect rate in any shipment exceeds 0.5 percent, the Buyer may reject the entire shipment, and the Supplier shall replace it at its own cost within fourteen days.
+
+7. Warranty
+
+The Supplier warrants that all modules shall be free from defects in materials and workmanship and shall conform to the specifications for a period of 24 months from the date of delivery. The Supplier's sole obligation under this warranty shall be to repair or replace defective modules, or, at the Buyer's option, to refund the purchase price of such modules. This warranty does not cover damage caused by improper installation, misuse or operation outside the rated temperature range of minus 40 to plus 85 degrees Celsius.
+
+8. Payment
+
+The Supplier shall invoice the Buyer upon delivery of each shipment. The Buyer shall pay each undisputed invoice within forty-five days of receipt. In the event of late payment, the Supplier may charge interest at the rate of 2 percent per month on the overdue amount until it is paid in full. The Buyer may withhold payment of any amount it disputes in good faith, provided that it notifies the Supplier of the dispute in writing within fifteen days of receiving the invoice.
+
+9. Confidentiality
+
+Each Party shall keep confidential all technical, commercial and financial information disclosed to it by the other Party under this Agreement, and shall use such information only for the purpose of performing this Agreement. These obligations shall survive for five years after the end of the Term. Information that is publicly available, independently developed, or lawfully received from a third party without restriction is not confidential information.
+
+10. Insurance
+
+The Supplier shall maintain, at its own cost, product liability insurance with a limit of not less than $5,000,000 per occurrence and shall provide a certificate of insurance to the Buyer upon request.
+
+11. Limitation of Liability
+
+Except for breaches of confidentiality and claims for bodily injury, neither Party shall be liable for any indirect or consequential loss. The total liability of each Party under this Agreement in any contract year shall not exceed $1,200,000.
+
+12. Termination
+
+Either Party may terminate this Agreement for cause upon sixty days written notice if the other Party materially breaches this Agreement and fails to cure the breach within thirty days of receiving notice of it. Either Party may terminate this Agreement immediately if the other Party becomes insolvent or enters into any arrangement with its creditors. Upon termination, the Buyer shall pay for all modules delivered before the termination date.
+
+13. Non-Solicitation
+
+During the Term and for a period of eighteen months after it ends, neither Party shall solicit for employment any engineer of the other Party who was involved in the performance of this Agreement.
+
+14. Force Majeure
+
+Neither Party shall be liable for any delay or failure to perform caused by events beyond its reasonable control, including natural disasters, war, epidemics, or government action. If a force majeure event continues for more than ninety days, either Party may terminate this Agreement by written notice.
+
+15. Governing Law
+
+This Agreement shall be governed by the laws of the Province of Ontario and the federal laws of Canada applicable therein. Any dispute that cannot be resolved by negotiation within thirty days shall be referred to arbitration in Toronto under the rules of the ADR Institute of Canada.

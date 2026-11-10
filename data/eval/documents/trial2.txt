@@ -1,0 +1,29 @@
+Oral Drug RX-210 Shows Promise in Phase II Lung Cancer Trial
+
+A Phase II randomized trial published in The Lancet Oncology in June 2025 reported that RX-210, an oral targeted therapy developed by Halden Therapeutics, improved outcomes for patients with treatment-resistant non-small cell lung cancer. The drug blocks a signalling pathway that tumours use to escape the effects of earlier treatments.
+
+Study Design
+
+The trial enrolled 860 patients at 24 clinical sites in Canada, France and South Korea between January 2023 and December 2024. Patients were randomly assigned to receive RX-210 or docetaxel chemotherapy, the standard second-line treatment. RX-210 is taken as a 200 mg tablet once daily, which allows patients to be treated at home rather than in an infusion clinic. Patients continued treatment until their disease progressed or side effects became unacceptable.
+
+The trial was led by Dr. Lucia Romero, who presented the results at a press briefing in Toronto. Patients were followed for a median of 19 months at the time of the analysis.
+
+Results
+
+Patients receiving RX-210 showed a 61 percent overall response rate, compared to 30 percent in the docetaxel group. The median progression-free survival was 11.6 months in the RX-210 group versus 6.1 months in the docetaxel group. The benefit was seen in all predefined subgroups, including patients older than 70 and patients whose tumours had spread to the brain. Overall survival data are not yet mature and will be reported at a later date.
+
+Safety
+
+Adverse events of grade 3 or higher occurred in 15 percent of patients taking RX-210, compared with 34 percent of patients receiving docetaxel. The most common side effects of RX-210 were diarrhoea, rash and fatigue, which were mostly mild. Four percent of patients stopped RX-210 because of side effects. Because the drug is taken as a tablet, patients also avoided the infusion reactions that can occur with intravenous chemotherapy.
+
+Expert Views
+
+Dr. Romero, who heads the thoracic oncology program at Princess Margaret Cancer Centre in Toronto, said that the results could change how second-line lung cancer is treated if they are confirmed in a larger study. In an independent commentary published alongside the paper, Dr. Michael Chen called the results encouraging but noted that the trial was smaller than recent Phase III studies and that a direct comparison with newer therapies is still needed.
+
+Halden Therapeutics named Vertex Oncology's VX-7890 as its main competitor in the treatment-resistant setting. Unlike VX-7890, which is given by infusion, RX-210 can be taken at home, which the company believes will be an advantage for older patients and those who live far from cancer centres.
+
+Next Steps
+
+Halden Therapeutics plans to begin a Phase III trial in January 2026 that will enrol about 1,500 patients in North America, Europe and Asia. The company expects to file for regulatory approval in 2028 if the Phase III trial is successful. The company estimates that a full course of treatment would cost about $96,000 at its planned list price, although final pricing will depend on negotiations with insurers and national health systems.
+
+Analysts at Morgan Stanley estimate that RX-210 could reach annual sales of $3 billion by 2032 if it is approved. Halden's shares rose 18 percent on the day the results were published.

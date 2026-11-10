@@ -461,8 +461,8 @@ Update this table in the same commit that changes the status.
 |---|---|---|
 | Package split (`backend/cadis/`), `api_server.py` shim | 0 | Done (`9a4f57c`) |
 | `config.py` (pydantic-settings) | 0 | Done (`9a4f57c`) |
-| Tests (unit / integration / slow) + CI | 0 | Unit + slow tests done (`2008457`); CI workflow added (`a91a548`), first run pending push; integration tier comes with Phase 1 |
-| Evaluation set + `eval.py` | 0 | Partial (`bf1b85a`): `eval.py` + baseline done; set has 4 documents (target 5–10) and unbalanced question types |
+| Tests (unit / integration / slow) + CI | 0 | Unit + slow tests done (`2008457`); CI (`a91a548`) green on GitHub; integration tier comes with Phase 1 |
+| Evaluation set + `eval.py` | 0 | Done (`bf1b85a`, expanded after `68382dc`): 8 documents, 60 questions (10 per type), baseline in `data/eval/results/phase0.json` |
 | V1 fixes: chunked NER, MiniLM 256-token cap, cached passage embeddings, no n×n matrix, PCA plot | 0 | Done (`9a4f57c`) |
 | Storage: SQLAlchemy tables + Alembic, file store | 1 | Not started |
 | Tenancy: default tenant, `collection_id` everywhere, required filters, isolation test | 1 | Not started |
