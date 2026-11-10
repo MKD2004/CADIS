@@ -48,7 +48,9 @@ class KeywordHit:
 
 class SqliteKeywordStore:
     def search(self, session: Session, question: str, allowed_collection_ids: Sequence[str],
-               k: int, document_ids: Sequence[str] | None = None) -> list[KeywordHit]:
+               k: int, document_ids: Sequence[str] | None = None,
+               section_ids: Sequence[str] | None = None) -> list[KeywordHit]:
         match = to_match_query(question)
-        rows = repositories.keyword_search(session, match, allowed_collection_ids, k, document_ids)
+        rows = repositories.keyword_search(session, match, allowed_collection_ids, k,
+                                           document_ids, section_ids)
         return [KeywordHit(c.id, score, c.document_id, c.section_path) for c, score in rows]

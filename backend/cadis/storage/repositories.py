@@ -197,7 +197,8 @@ def current_chunks(session: Session, chunk_ids: Sequence[str],
 
 
 def keyword_search(session: Session, match: str, allowed_collection_ids: Iterable[str],
-                   k: int, document_ids: Sequence[str] | None = None) -> list[tuple[Chunk, float]]:
+                   k: int, document_ids: Sequence[str] | None = None,
+                   section_ids: Sequence[str] | None = None) -> list[tuple[Chunk, float]]:
     """BM25 over the FTS5 index, current versions only. Returns
     [(chunk, score)] with **higher = better** (FTS5's bm25() is lower = better)."""
     ids = _ids(allowed_collection_ids)
@@ -211,6 +212,10 @@ def keyword_search(session: Session, match: str, allowed_collection_ids: Iterabl
         doc_filter = " AND c.document_id IN (" + ", ".join(
             f":d{i}" for i in range(len(document_ids))) + ")"
         params.update({f"d{i}": did for i, did in enumerate(document_ids)})
+    if section_ids:
+        doc_filter += " AND c.section_id IN (" + ", ".join(
+            f":s{i}" for i in range(len(section_ids))) + ")"
+        params.update({f"s{i}": sid for i, sid in enumerate(section_ids)})
     sql = text(
         "SELECT c.id AS id, -bm25(chunk_fts) AS score FROM chunk_fts "
         "JOIN chunk c ON c.rowid = chunk_fts.rowid "

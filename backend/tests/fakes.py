@@ -131,7 +131,7 @@ class InMemoryVectorStore:
                 "version": r.version, "page": r.page, "section_id": r.section_id,
                 "section_path": r.section_path})
 
-    def search(self, vector, allowed_collection_ids, k, document_ids=None, section_paths=None):
+    def search(self, vector, allowed_collection_ids, k, document_ids=None, section_ids=None):
         from cadis.index.vector_store import VectorHit
         allowed = set(allowed_collection_ids)
         if not allowed:
@@ -144,7 +144,7 @@ class InMemoryVectorStore:
                 continue
             if document_ids and m["document_id"] not in document_ids:
                 continue
-            if section_paths and m["section_path"] not in section_paths:
+            if section_ids and m["section_id"] not in section_ids:
                 continue
             hits.append(VectorHit(cid, float(v @ q), m["document_id"], m["section_path"]))
         return sorted(hits, key=lambda h: -h.score)[:k]
@@ -166,3 +166,23 @@ class InMemoryVectorStore:
 
     def count(self):
         return len(self.rows)
+
+    def export(self):
+        ids = list(self.rows)
+        return ids, [list(self.rows[i][0]) for i in ids], [self.rows[i][1] for i in ids]
+
+
+class FakeReranker:
+    """Cross-encoder stand-in: score = shared content words (question vs passage)."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def predict(self, pairs):
+        self.calls += 1
+        out = []
+        for question, passage in pairs:
+            q = {w for w in _TOKEN.findall(question.lower()) if len(w) > 3}
+            p = set(_TOKEN.findall(passage.lower()))
+            out.append(float(len(q & p)))
+        return out

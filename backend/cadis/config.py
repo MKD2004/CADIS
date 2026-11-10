@@ -83,6 +83,22 @@ class Settings(BaseSettings):
     chunk_header_max_tokens: int = Field(40, validation_alias=_env("CHUNK_HEADER_MAX_TOKENS"))
     embed_batch_size: int = Field(32, validation_alias=_env("EMBED_BATCH_SIZE"))
 
+    # ── Retrieval (Phase 2; ADR-009/010/011/028) ───────────────────────────────
+    # Prefix added to *queries* only. "auto" = the BGE instruction for BGE
+    # English models, nothing otherwise. Set "" to disable.
+    emb_query_prefix: str = Field("auto", validation_alias=_env("EMB_QUERY_PREFIX"))
+    rerank_model: str = Field("cross-encoder/ms-marco-MiniLM-L-6-v2",
+                              validation_alias=_env("RERANK_MODEL"))
+    use_reranker: bool = Field(True, validation_alias=_env("USE_RERANKER"))
+    retrieve_k: int = Field(50, validation_alias=_env("RETRIEVE_K"))        # per list, before fusion
+    rerank_candidates: int = Field(20, validation_alias=_env("RERANK_CANDIDATES"))
+    rerank_k: int = Field(8, validation_alias=_env("RERANK_K"))             # chunks returned
+    rrf_k: int = Field(60, validation_alias=_env("RRF_K"))
+    max_per_document: int = Field(0, validation_alias=_env("MAX_PER_DOCUMENT"))  # 0 = no cap
+    section_filter: bool = Field(True, validation_alias=_env("SECTION_FILTER"))
+    section_whole_max_tokens: int = Field(400, validation_alias=_env("SECTION_WHOLE_MAX_TOKENS"))
+    expand_neighbours: int = Field(1, validation_alias=_env("EXPAND_NEIGHBOURS"))
+
     # ── Background jobs (ADR-013) ──────────────────────────────────────────────
     run_worker: bool = Field(True, validation_alias=_env("RUN_WORKER"))   # in-process worker
     job_lease_seconds: int = Field(90, validation_alias=_env("JOB_LEASE_SECONDS"))

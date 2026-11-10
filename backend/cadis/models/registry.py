@@ -56,12 +56,20 @@ def get_summarizer():
     return tokenizer, model
 
 
+@lru_cache(maxsize=1)
+def get_reranker():
+    """Cross-encoder that scores (question, passage) pairs (ADR-010)."""
+    from sentence_transformers import CrossEncoder
+    return CrossEncoder(get_settings().rerank_model, max_length=512)
+
+
 LOADERS = {
     "spacy": get_nlp,
     "embedder": get_embedder,
     "ner": get_ner_pipe,
     "qa": get_qa_pipe,
     "summarizer": get_summarizer,
+    "reranker": get_reranker,
 }
 
 

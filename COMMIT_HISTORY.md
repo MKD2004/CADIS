@@ -176,3 +176,9 @@ The architecture V1 is based on. Frontend rebuilt in Next.js; backend became
 | `0051287` | 2026-11-10 | feat(ingest) | parse, clean, build the section tree and chunk documents into the indexes | `backend/cadis/ingest/`, `backend/cadis/retrieval/search.py`, `backend/scripts/check_consistency.py`, tests | New dep: pymupdf (AGPL, ADR-016); V1 `/api/extract` still uses pypdf. Chunk = 200 tokens max (capped so header + chunk fit MiniLM). Wrong sections → check `ingest/sections.py` heuristics; missing/orphan vectors → `python backend/scripts/check_consistency.py --repair`. ADR-014/016/028. |
 | `42b48be` | 2026-11-10 | feat(api) | add collections, documents and jobs endpoints with tenant scoping | `backend/cadis/api/`, `main.py`, `Dockerfile`, `.dockerignore`, tests | Startup now runs Alembic + starts the worker thread; if storage fails, V1 keeps working and V2 returns 503 (see the startup log). Docker: migrations copied, `CADIS_DATA_DIR=/tmp/cadis-data` (not persistent, ADR-020). Live-tested: kill mid-embedding → restart → job finished on attempt 2, 243/243/243 chunks/FTS/vectors; 20 × 105-page PDFs ingested in 73 s. ADR-013/015. |
 | `2991521` | 2026-11-10 | feat(client) | add Library page for collections, uploads and ingest progress | `client/app/library/`, `client/lib/api.ts`, `client/components/navbar.tsx` | First page on the V2 API. Progress comes from `GET /jobs/{id}/events` (EventSource). If the page shows "Cannot reach the CADIS API", check `NEXT_PUBLIC_API_URL` and CORS (`CADIS_FRONTEND_URLS`). `tsc` and `next build` clean. |
+| `065808d` | 2026-11-10 | docs | mark Phase 1 done and document the V2 storage, jobs and API | `CHECKLIST.md`, `ARCHITECTURE_V2.md`, `DECISIONS.md`, `README.md`, `COMMIT_HISTORY.md` | Docs only. CI green on GitHub. ✅ known-good point (end of Phase 1). |
+
+## V2 — Phase 2: Better retrieval
+
+| Hash | Date | Type | Message | Area | Notes |
+|---|---|---|---|---|---|

@@ -47,12 +47,13 @@ class VectorStore(Protocol):
     def upsert(self, records: Sequence[VectorRecord]) -> None: ...
     def search(self, vector: Sequence[float], allowed_collection_ids: Sequence[str], k: int,
                document_ids: Sequence[str] | None = None,
-               section_paths: Sequence[str] | None = None) -> list[VectorHit]: ...
+               section_ids: Sequence[str] | None = None) -> list[VectorHit]: ...
     def delete_document(self, document_id: str, keep_version: int | None = None) -> None: ...
     def delete_ids(self, ids: Sequence[str]) -> None: ...
     def ids_for_document(self, document_id: str) -> set[str]: ...
     def all_ids(self) -> set[str]: ...
     def count(self) -> int: ...
+    def export(self) -> tuple[list[str], list[list[float]], list[dict]]: ...
 
 
 class ChromaVectorStore:
@@ -85,15 +86,15 @@ class ChromaVectorStore:
                         "section_id": r.section_id, "section_path": r.section_path}
                        for r in records])
 
-    def search(self, vector, allowed_collection_ids, k, document_ids=None, section_paths=None):
+    def search(self, vector, allowed_collection_ids, k, document_ids=None, section_ids=None):
         allowed = list(allowed_collection_ids)
         if not allowed or k <= 0:
             return []
         clauses = [{"collection_id": {"$in": allowed}}]
         if document_ids:
             clauses.append({"document_id": {"$in": list(document_ids)}})
-        if section_paths:
-            clauses.append({"section_path": {"$in": list(section_paths)}})
+        if section_ids:
+            clauses.append({"section_id": {"$in": list(section_ids)}})
         where = clauses[0] if len(clauses) == 1 else {"$and": clauses}
         n = min(k, max(1, self._col.count()))
         res = self._col.query(query_embeddings=[list(map(float, vector))], n_results=n,
@@ -130,6 +131,18 @@ class ChromaVectorStore:
 
     def count(self):
         return self._col.count()
+
+    def export(self):
+        """All (ids, vectors, metadatas) — for the exact-search baseline."""
+        ids, vecs, metas, offset = [], [], [], 0
+        while True:
+            page = self._col.get(include=["embeddings", "metadatas"], limit=5000, offset=offset)
+            ids += page["ids"]
+            vecs += [list(map(float, v)) for v in page["embeddings"]]
+            metas += page["metadatas"]
+            if len(page["ids"]) < 5000:
+                return ids, vecs, metas
+            offset += 5000
 
 
 _store: VectorStore | None = None

@@ -85,3 +85,44 @@ class SectionOut(BaseModel):
     char_start: int
     char_end: int
     chunk_count: int = 0
+
+
+class SearchRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    # Optional narrowing; always intersected with what the caller may read.
+    collection_ids: list[str] | None = None
+    document_ids: list[str] | None = None
+    k: int = Field(8, ge=1, le=50)
+
+
+class SectionTargetOut(BaseModel):
+    phrase: str
+    titles: list[str]
+    sections: int
+
+
+class SearchHitOut(BaseModel):
+    chunk_id: str
+    document_id: str
+    document_title: str
+    section_path: str
+    page: int | None
+    char_start: int
+    char_end: int
+    text: str
+    score: float
+    target: str | None
+
+
+class SearchOut(BaseModel):
+    question: str
+    hits: list[SearchHitOut]
+    sections: list[SectionTargetOut]
+    timings_ms: dict[str, float]
+
+
+class QueryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    collection_ids: list[str] | None = None
+    document_ids: list[str] | None = None
+    mode: str = Field("extractive", pattern="^extractive$")   # "generative" arrives in Phase 3

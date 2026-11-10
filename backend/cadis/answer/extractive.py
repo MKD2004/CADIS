@@ -290,6 +290,39 @@ def answer_question(question, text, tokenizer, model, embedder,
     }
 
 
+def answer_contexts(question, contexts, tokenizer, model):
+    """V2: answer over retrieved contexts (texts of possibly different
+    documents). Returns {"answer", "confidence", "context", "start", "end"}
+    with offsets local to ``contexts[context]``, or an empty answer.
+
+    Contexts are laid out in one virtual coordinate space with a gap between
+    them, so the shared span decoder can be reused and a span never runs from
+    one context into the next."""
+    empty = {"answer": "", "confidence": 0.0, "context": None, "start": 0, "end": 0}
+    question = (question or "").strip()
+    texts = [t for t in contexts if t and t.strip()]
+    if not question or not texts:
+        return empty
+    bases, pos = [], 0
+    for t in contexts:
+        bases.append(pos)
+        pos += len(t or "") + 1000
+    blocks = [(t, b) for t, b in zip(contexts, bases) if t and t.strip()]
+
+    best, null_score = _best_span(question, blocks, tokenizer, model)
+    if best is None:
+        return empty
+    score, start, end = best
+    idx = max(i for i, b in enumerate(bases) if b <= start)
+    text, base = contexts[idx], bases[idx]
+    s, e = _trim_span(text, start - base, min(end - base, len(text)))
+    margin = score - (null_score if null_score is not None else 0.0)
+    if margin <= 0 or e <= s:
+        return empty
+    return {"answer": text[s:e], "confidence": round(1.0 / (1.0 + math.exp(-margin)), 4),
+            "context": idx, "start": s, "end": e}
+
+
 PRESET_QUESTIONS = [
     "Who is the main person mentioned?",
     "What organization is involved?",

@@ -35,14 +35,15 @@ def clean_state(monkeypatch, tmp_path):
 def v2(monkeypatch):
     """V2 storage in the test's temp dir: migrated SQLite, a fake embedder and
     an in-memory vector store. Use ``v2_chroma`` for the real ChromaDB."""
-    from fakes import FakeEmbedder, InMemoryVectorStore
+    from fakes import FakeEmbedder, FakeReranker, InMemoryVectorStore
 
     from cadis.index import vector_store
     from cadis.models import registry
     from cadis.storage import db, repositories
 
-    emb = FakeEmbedder()
+    emb, reranker = FakeEmbedder(), FakeReranker()
     monkeypatch.setattr(registry, "get_embedder", lambda: emb)
+    monkeypatch.setattr(registry, "get_reranker", lambda: reranker)
     store = InMemoryVectorStore()
     vector_store.set_vector_store(store)
     db.init_db()
@@ -56,14 +57,15 @@ def v2(monkeypatch):
 @pytest.fixture
 def v2_chroma(monkeypatch):
     """Like ``v2`` but with a real on-disk ChromaDB (integration tests)."""
-    from fakes import FakeEmbedder
+    from fakes import FakeEmbedder, FakeReranker
 
     from cadis.index import vector_store
     from cadis.models import registry
     from cadis.storage import db, repositories
 
-    emb = FakeEmbedder()
+    emb, reranker = FakeEmbedder(), FakeReranker()
     monkeypatch.setattr(registry, "get_embedder", lambda: emb)
+    monkeypatch.setattr(registry, "get_reranker", lambda: reranker)
     vector_store.set_vector_store(None)
     db.init_db()
     with db.session_scope() as s:

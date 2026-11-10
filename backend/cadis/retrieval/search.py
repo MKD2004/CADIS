@@ -1,9 +1,9 @@
-"""Tenant-scoped search over stored chunks (Phase 1 baseline).
+"""Single-index searches over stored chunks (Phase 1), kept for tests and
+debugging. The full pipeline (hybrid + re-rank + section filter) is
+``retrieval.retrieve``.
 
-Phase 1 provides the two searches separately, with the access rule built in:
-``allowed_collection_ids`` is required and every hit is re-checked against
-SQLite (visible collection, current document version). Phase 2 adds hybrid
-fusion (RRF), re-ranking and the section soft filter on top of these.
+The access rule is built in: ``allowed_collection_ids`` is required and every
+hit is re-checked against SQLite (visible collection, current version).
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from cadis.index.keyword_store import SqliteKeywordStore
 from cadis.index.vector_store import get_vector_store
-from cadis.models import registry
+from cadis.models.embedding import embed_query
 from cadis.storage import repositories
 from cadis.storage.db import session_scope
 from cadis.storage.tables import Chunk
@@ -40,7 +40,7 @@ def dense_search(question: str, allowed_collection_ids: Sequence[str], k: int = 
     allowed = list(allowed_collection_ids)
     if not allowed or not question.strip():
         return []
-    vector = registry.get_embedder().encode([question])[0]
+    vector = embed_query(question)
     # Over-fetch: some candidates may be stale (old versions) and get dropped.
     hits = get_vector_store().search(vector, allowed, k * 3, document_ids)
     with session_scope() as db:
