@@ -7,9 +7,10 @@ where the code lives, and how data moves through the system.
 - **What** gets built in which order → [`CADIS V2.md`](CADIS%20V2.md) (the phase plan)
 - **What changed and when** → [`COMMIT_HISTORY.md`](COMMIT_HISTORY.md)
 
-> **Status: target design.** As of 2026-11-09 the running system is still V1 (one file,
-> `api_server.py`). Section [11](#11-implementation-status) tracks what exists. Update that
-> table as parts are built.
+> **Status: target design.** As of 2026-11-10 the V1 code has been moved into
+> `backend/cadis/` (Phase 0), but the API is still V1 (`/api/*` from `api/legacy.py`).
+> Section [11](#11-implementation-status) tracks what exists. Update that table as parts
+> are built; task-level progress is in [`CHECKLIST.md`](CHECKLIST.md).
 
 ---
 
@@ -458,11 +459,11 @@ Update this table in the same commit that changes the status.
 
 | Component | Phase | Status |
 |---|---|---|
-| Package split (`backend/cadis/`), `api_server.py` shim | 0 | Not started |
-| `config.py` (pydantic-settings) | 0 | Not started |
-| Tests (unit / integration / slow) + CI | 0 | Not started |
-| Evaluation set + `eval.py` | 0 | Not started |
-| V1 fixes: chunked NER, MiniLM 256-token cap, cached passage embeddings, no n×n matrix, PCA plot | 0 | Not started |
+| Package split (`backend/cadis/`), `api_server.py` shim | 0 | Done (`9a4f57c`) |
+| `config.py` (pydantic-settings) | 0 | Done (`9a4f57c`) |
+| Tests (unit / integration / slow) + CI | 0 | Unit + slow tests done (`2008457`); CI workflow added (`a91a548`), first run pending push; integration tier comes with Phase 1 |
+| Evaluation set + `eval.py` | 0 | Partial (`bf1b85a`): `eval.py` + baseline done; set has 4 documents (target 5–10) and unbalanced question types |
+| V1 fixes: chunked NER, MiniLM 256-token cap, cached passage embeddings, no n×n matrix, PCA plot | 0 | Done (`9a4f57c`) |
 | Storage: SQLAlchemy tables + Alembic, file store | 1 | Not started |
 | Tenancy: default tenant, `collection_id` everywhere, required filters, isolation test | 1 | Not started |
 | Job queue: states, claim/lease/recover, worker | 1 | Not started |

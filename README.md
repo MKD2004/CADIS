@@ -22,7 +22,7 @@ flowchart LR
     end
 
     subgraph ML ["ML Backend — HuggingFace Spaces (Docker)"]
-        API["FastAPI — api_server.py"]
+        API["FastAPI — cadis package<br/>backend/cadis"]
         subgraph Models ["NLP Models"]
             SPACY["spaCy en_core_web_sm<br/>Tokens · POS · Deps · Sents"]
             MiniLM["all-MiniLM-L6-v2<br/>384-d Embeddings"]
@@ -47,7 +47,12 @@ flowchart LR
 ```
 
 There is no separate API gateway — the frontend calls FastAPI directly, with CORS
-restricted to the origins listed in `api_server.py`.
+restricted to localhost plus the origins in `CADIS_FRONTEND_URLS` (or the V1 `FRONTEND_URL`).
+
+> **V2 in progress.** CADIS is being rebuilt for many large documents and cross-document
+> questions. See [`CADIS V2.md`](CADIS%20V2.md) (phase plan), [`CHECKLIST.md`](CHECKLIST.md)
+> (progress), [`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) and [`DECISIONS.md`](DECISIONS.md).
+> Phase 0 (package split, config, tests, evaluation, CI) is in place; the API is still V1.
 
 ### Request Flow
 
@@ -69,8 +74,8 @@ restricted to the origins listed in `api_server.py`.
 | # | Module | Model | What it produces |
 |---|--------|-------|------------------|
 | 1 | **Preprocessing** | spaCy `en_core_web_sm` | Tokens with lemma/POS/dependency, sentence split, corpus stats |
-| 2 | **Embeddings** | `all-MiniLM-L6-v2` | 384-d sentence vectors, cosine similarity matrix, most-similar pairs |
-| 3 | **NER + IE** | `dslim/bert-base-NER` + spaCy | Person/Org/Location/Misc entities (BERT) plus Date and numeric entities (spaCy — the "Money" bucket also holds cardinals and percentages), subject-verb-object relations |
+| 2 | **Embeddings** | `all-MiniLM-L6-v2` | 384-d sentence vectors, similarity matrix for the first 20 sentences, most-similar pairs across all sentences, PCA 2-D map |
+| 3 | **NER + IE** | `dslim/bert-base-NER` + spaCy | Person/Org/Location/Misc entities (BERT, run in sentence-aligned windows so long documents are read to the end) plus Date and numeric entities (spaCy — the "Money" bucket also holds cardinals and percentages), subject-verb-object relations |
 | 4 | **Ambiguity** | MiniLM + spaCy parse | PP-attachment and anaphoric ambiguities (at most one per sentence), each with a resolved candidate |
 | 5 | **QA Engine** | `deepset/roberta-base-squad2` | Extractive answer spans with character offsets and confidence |
 | 6 | **Summary** | `sshleifer/distilbart-cnn-12-6` | Abstractive executive summary, key sentences, date-anchored timeline |
@@ -80,17 +85,17 @@ restricted to the origins listed in `api_server.py`.
 Extractive QA returns a span of your document — it never generates text, so it cannot
 hallucinate. Getting a *correct* span requires more than an argmax:
 
-- The document is split into overlapping 200-word passages; MiniLM ranks them against the
-  question and the top 6 go to the model. Long documents stay answerable without running
-  the QA model over every window. Passages are embedded **once per request**, not once per
-  question — only the question vector changes.
-  (Retrieval is a no-op up to 950 words, where the document splits into at most 6
-  passages anyway.)
+- The document is split into overlapping passages of at most 220 **embedding-model
+  tokens** (50-token overlap), so each passage fits inside MiniLM's 256-token limit and
+  nothing is cut off before embedding. MiniLM ranks them against the question and the
+  top 6 go to the model. Long documents stay answerable without running the QA model over
+  every window. Passage vectors are **cached per document** (a small LRU shared by
+  `/api/process` and `/api/qa-ask`), so follow-up questions only embed the question.
+  (Retrieval is a no-op for short documents that split into at most 6 passages anyway.)
 - Retrieved passages that are adjacent in the document are **merged into contiguous blocks
-  before tokenization**. A lone 200-word passage is only ~215–255 tokens, which never
-  overflows a 384-token window, so feeding passages individually meant the stride did
-  nothing. Once adjacent passages are merged (two → ~375 tokens, three → ~535, six →
-  ~1000), the block tiles into multiple windows at a 128-token stride, so an answer
+  before tokenization**. A lone passage never overflows a 384-token window, so feeding
+  passages individually meant the stride did nothing. Once adjacent passages are merged,
+  the block tiles into multiple windows at a 128-token stride, so an answer
   straddling a passage seam is recoverable. Retrieved passages that are *not* adjacent
   stay separate single-window blocks — there is no seam between them to straddle.
 - Candidate spans are restricted to *context* tokens, must satisfy `end >= start`, and are
@@ -118,15 +123,16 @@ linearly with document length (a 6,000-word document takes ~50 s on a CPU laptop
 
 ## Performance
 
-All five model loaders are wrapped in `@lru_cache(maxsize=1)`, so weights load once per
-worker process and are reused. `benchmark.py` measures what that buys:
+All five model loaders (in `backend/cadis/models/registry.py`) are wrapped in
+`@lru_cache(maxsize=1)`, so weights load once per worker process and are reused.
+`backend/scripts/benchmark.py` measures what that buys:
 
 ```
-python benchmark.py
+python backend/scripts/benchmark.py
 ```
 
 One run on a CPU-only Windows laptop with weights already in `~/.cache/huggingface`
-(`python benchmark.py 100 400`):
+(`python benchmark.py 100 400`, measured before the Phase 0 refactor):
 
 | Document | Warm request (inference) | Cold request (load + inference) | Ratio |
 |---|---|---|---|
@@ -169,8 +175,11 @@ python -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-uvicorn api_server:app --host 0.0.0.0 --port 8000 --reload
+uvicorn cadis.main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload
 ```
+
+(`uvicorn api_server:app` from the repository root still works; `api_server.py` is a
+compatibility shim during the V2 migration.)
 
 Models download from HuggingFace on first use (~2.1 GB total, most of it DistilBART) and are cached afterwards.
 
@@ -184,16 +193,36 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### 3. Tests and evaluation
+
+```bash
+pip install -r requirements-dev.txt            # pytest + httpx, on top of requirements.txt
+pytest backend                                 # unit tests with fake models (seconds)
+pytest backend -m slow                         # real models (downloads ~2 GB on first run)
+python backend/scripts/eval.py                 # retrieval + answer quality on data/eval
+python backend/scripts/eval.py --save phaseN   # also write data/eval/results/phaseN.json
+```
+
+CI (`.github/workflows/ci.yml`) runs the unit tests, `npx tsc --noEmit` and
+`npm run build` on every push to `main`.
+
 ### Environment Variables
+
+Backend settings live in `backend/cadis/config.py` and are read from environment
+variables with a `CADIS_` prefix (a `.env` file works in development). The V1 names in
+brackets are still accepted.
 
 | Variable | Service | Purpose |
 |----------|---------|---------|
 | `NEXT_PUBLIC_API_URL` | Frontend | FastAPI base URL (default `http://localhost:8000`) |
-| `FRONTEND_URL` | Backend | Deployed frontend origin, appended to the CORS whitelist |
-| `QA_MODEL` | Backend | Override the QA model (default `deepset/roberta-base-squad2`) |
-| `SUM_MODEL` | Backend | Override the summarization model |
-| `NER_MODEL` | Backend | Override the NER model |
-| `EMB_MODEL` | Backend | Override the embedding model |
+| `CADIS_FRONTEND_URLS` (`FRONTEND_URL`) | Backend | Comma-separated frontend origins added to the CORS allow-list |
+| `CADIS_QA_MODEL` (`QA_MODEL`) | Backend | QA model (default `deepset/roberta-base-squad2`) |
+| `CADIS_SUM_MODEL` (`SUM_MODEL`) | Backend | Summarization model |
+| `CADIS_NER_MODEL` (`NER_MODEL`) | Backend | NER model |
+| `CADIS_EMB_MODEL` (`EMB_MODEL`) | Backend | Embedding model |
+
+Tuning values (passage size, QA window, NER window, summary chunk size, …) are listed in
+`config.py`, each overridable the same way.
 
 ---
 
@@ -211,12 +240,24 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Project Structure
 
 ```
-cadis_project/
-├── api_server.py           # FastAPI backend — all six modules
+CADIS/
+├── backend/
+│   ├── cadis/              # FastAPI backend package
+│   │   ├── main.py         # app factory: routers + CORS
+│   │   ├── config.py       # all settings (pydantic-settings)
+│   │   ├── api/            # health + V1 endpoints (legacy.py)
+│   │   ├── analysis/       # the six modules: preprocessing, embeddings view, NER, ambiguity, summary
+│   │   ├── answer/         # extractive QA (RoBERTa span decoding, passage cache)
+│   │   ├── ingest/         # file parsers (PDF / DOCX / TXT)
+│   │   └── models/         # registry.py — the only place models are loaded
+│   ├── tests/              # unit/ (fake models) and slow/ (real models)
+│   ├── scripts/            # benchmark.py, eval.py
+│   └── pyproject.toml      # pytest configuration
+├── api_server.py           # compatibility shim: from cadis.main import app
 ├── Dockerfile              # HuggingFace Spaces image (CPU torch; models fetched on first use)
-├── requirements.txt        # Python dependencies
-├── benchmark.py            # Cold-vs-warm latency measurement for model caching
+├── requirements.txt        # Python dependencies (requirements-dev.txt adds test tools)
 ├── hf_README.md            # HF Space card metadata
+├── .github/workflows/      # CI
 ├── client/                 # Next.js 16 frontend
 │   ├── app/
 │   │   ├── page.tsx        # Landing page
@@ -224,7 +265,9 @@ cadis_project/
 │   │   └── pipeline/       # One page per module
 │   ├── components/         # Landing sections + shadcn/ui primitives
 │   └── lib/utils.ts        # Tailwind className helper (cn)
-└── data/                   # Sample datasets
+└── data/
+    ├── ambiguity_dataset.csv
+    └── eval/               # evaluation documents, questions and saved results
 ```
 
 ---

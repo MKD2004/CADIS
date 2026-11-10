@@ -153,8 +153,12 @@ The architecture V1 is based on. Frontend rebuilt in Next.js; backend became
 
 ## V2 — Phase 0: Foundation
 
-*Rows are added here as V2 work is committed. The commit adding `ARCHITECTURE_V2.md`,
-`DECISIONS.md` and this file is recorded by the next commit.*
+*Rows are added here as V2 work is committed. Progress per task: [`CHECKLIST.md`](CHECKLIST.md).*
 
 | Hash | Date | Type | Message | Area | Notes |
 |---|---|---|---|---|---|
+| `4c57fab` | 2026-11-10 | docs | add V2 architecture, decision log and commit history | `ARCHITECTURE_V2.md`, `DECISIONS.md`, `COMMIT_HISTORY.md` | Docs only; safe to ignore when debugging code. |
+| `9a4f57c` | 2026-11-10 | refactor | split api_server.py into the cadis package and fix V1 scale bugs | `backend/cadis/`, `api_server.py`, `Dockerfile`, `.dockerignore`, `requirements.txt`, `client/app/pipeline/embeddings` | **Big commit.** Code moved to `backend/cadis/`; `api_server.py` is a shim; Docker now runs `cadis.main:app` with `PYTHONPATH=/app/backend`. Behaviour changes: NER in windows (long docs read to the end; aggregation `simple`→`first`), passages sized in tokens (≤ 220, was 200 words), passage cache across requests, similarity matrix capped at 20 sentences, PCA plot. If the Space build or startup fails, check the Dockerfile `COPY`/`PYTHONPATH` first. If embeddings page looks wrong, compare the response shape (`positions`, `matrix_size`, `projection`). ADR-003/021/023. |
+| `2008457` | 2026-11-10 | test | add unit tests with fake models and slow real-model tests | `backend/tests/`, `requirements-dev.txt` | `pytest backend` (fakes, ~8 s) · `pytest backend -m slow` (real models, ~3 min warm). Fakes are swapped in via `monkeypatch.setattr(registry, ...)`. ADR-022. |
+| `bf1b85a` | 2026-11-10 | feat(eval) | add evaluation set, eval script and Phase 0 baseline | `data/eval/`, `backend/scripts/eval.py` | Baseline `results/phase0.json`: recall@1 0.78, MRR 0.92, single-fact EM 0.97, numeric EM 0.0, abstention 0.8. Only 7 passages in the collection, so recall@6 = 1.0 by construction. |
+| `a91a548` | 2026-11-10 | ci | run backend tests and frontend type-check and build on every push | `.github/workflows/ci.yml` | Python 3.11, CPU torch first. Audits are `continue-on-error`. If CI fails on install, compare with the Dockerfile's torch step. |
