@@ -1,0 +1,6 @@
+# Development and CI dependencies (runtime ones are in requirements.txt).
+# Install CPU-only torch first (see Dockerfile), then:
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=8.0
+httpx>=0.27.0          # FastAPI TestClient
