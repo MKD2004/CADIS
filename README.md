@@ -11,7 +11,123 @@ pasted text — preprocessing, sentence embeddings, named entity recognition, am
 resolution, extractive question answering and abstractive summarization — and walks you
 through each stage in an interactive Next.js dashboard.
 
+> **CADIS V2 is in progress.** V2 turns CADIS from a single-document demo into a system
+> that stores **many large documents** and answers questions **across** them, with cited,
+> checked answers. Phase 0 (foundation) is done; the running app is still V1.
+> Jump to [CADIS V2](#cadis-v2--many-documents-cited-answers) for the design and roadmap.
+
 ---
+
+## CADIS V2 — many documents, cited answers
+
+### What changes
+
+| | V1 (today) | V2 (target) |
+|---|---|---|
+| Documents | Sent with every request, never stored | Uploaded once into **collections**, stored and processed in background jobs |
+| Scope | One document at a time | Questions across a whole collection |
+| Chunks | Fixed-size passages that ignore headings | **Section-aware chunks**: never cross a heading, each knows its section path |
+| Search | Brute-force MiniLM cosine | **Hybrid**: dense vectors (ChromaDB/HNSW) + BM25 (SQLite FTS5), fused with RRF, re-ranked by a cross-encoder, with a **soft section filter** |
+| Answers | Extractive span (RoBERTa) | **Structured claims** written by an LLM, each with a citation and an exact quote, checked twice (quote match + entailment) |
+| Arithmetic | Not possible | The LLM writes the expression; **Python computes it** (Decimal, unit checks) |
+| Storage | None | SQLite (metadata, chunks, jobs, FTS5) + ChromaDB (vectors) + file store |
+
+### How a document is ingested
+
+```mermaid
+flowchart LR
+    UP["Upload<br/>PDF / DOCX / TXT"] --> JOB["Background job<br/>(lease, retries, progress)"]
+    JOB --> PARSE["Parse + clean<br/>pages, headers/footers"]
+    PARSE --> TREE["Section tree<br/>from headings"]
+    TREE --> CH["Chunk inside each section<br/>300–500 tokens, never crosses a heading"]
+    CH --> HDR["Contextual header<br/>Doc › Section: …"]
+    HDR --> IDX["Index<br/>SQLite + FTS5 + ChromaDB<br/>(idempotent upserts)"]
+
+    style TREE fill:#111827,stroke:#22d3ee,color:#e2e8f0
+```
+
+Documents keep their structure as a **section tree**, like folders on a disk:
+
+```
+Paper.pdf
+├── 3 Methodology
+│   └── 3.2 Dataset        ← chunks here carry section_path "3 Methodology > 3.2 Dataset"
+└── 4 Experiments
+    └── 4.2 Results
+```
+
+Because a chunk never spans two sections, one chunk is about one topic.
+
+### How a question is answered (proposed flow)
+
+```mermaid
+flowchart TB
+    Q["Question"] --> PLAN["Query planner<br/>rewrite with chat history<br/>split multi-hop / comparison / section-targeted"]
+    PLAN --> SEC{"Names a section?"}
+    SEC -- "no" --> HY["Hybrid search<br/>dense (HNSW) + BM25 → RRF"]
+    SEC -- "yes" --> RES["Resolve against real section titles<br/>'Methods' ≈ 'Methodology'"]
+    RES --> SOFT["Hybrid search with AND without<br/>the section filter → RRF<br/>(in-section chunks rank higher)"]
+    HY --> RR["Cross-encoder re-rank → top 8<br/>quota per sub-question"]
+    SOFT --> RR
+    RR --> EXP["Expand: neighbour chunks,<br/>or a small section in full"]
+    EXP --> LLM["LLM → JSON claims<br/>each with chunk ID + exact quote"]
+    LLM --> CALC["Calculator<br/>(Python, not the LLM)"]
+    CALC --> CHK["Check 1: quote is in the chunk<br/>Check 2: quote entails the claim"]
+    CHK --> OUT["Answer with citations<br/>answered / partially supported / not in documents"]
+
+    style SEC fill:#111827,stroke:#22d3ee,color:#e2e8f0
+    style SOFT fill:#111827,stroke:#22d3ee,color:#e2e8f0
+```
+
+**Why the section filter is soft.** For *"Find the dataset information from Methodology and
+the experimental results from Experiments"*, the planner makes two sub-questions, one per
+section, and each gets its own share of the final chunks so one section cannot crowd out
+the other. Search still runs over everything too, so if the dataset details actually sit
+in *Experimental Setup*, they are not lost. Questions that name no section use plain
+hybrid search. HNSW stays the search engine; the tree guides it
+([ADR-028](DECISIONS.md#adr-028--section-tree-as-a-soft-retrieval-filter)).
+
+### Roadmap
+
+| Phase | Goal | Status |
+|---|---|---|
+| 0 — Foundation | Package split, config, tests, evaluation set, CI, V1 scale fixes | ✅ Done |
+| 1 — Ingestion and storage | Stored collections, background jobs, section tree, section-aware chunking, tenancy | Next |
+| 2 — Better retrieval | Better embeddings, ChromaDB + BM25 hybrid, re-ranker, section soft filter | Planned |
+| 3 — Generated answers | LLM claims with citations, two checks, Python calculator | Planned |
+| 4 — Cross-document | Query planner: multi-hop, comparison, section-targeted sub-questions | Planned |
+| 5 — Analysis rework | Stored per-document results, coreference, entity index | Planned |
+| 6 — Scale and deploy | Persistent storage, ONNX on CPU, auth, limits, monitoring | Planned |
+
+### Measuring progress
+
+Every phase is measured on the same evaluation set in `data/eval/`: 8 documents and 60
+questions, 10 each of single-fact, numeric, cross-passage, cross-document, comparison and
+unanswerable (section-targeted questions are added in Phase 2). Phase 0 baseline with V1
+retrieval and extractive QA (`data/eval/results/phase0.json`):
+
+| Metric | Phase 0 |
+|---|---|
+| Recall@1 / @3 / @6 | 0.34 / 0.74 / 0.94 |
+| MRR | 0.86 |
+| Exact match: single-fact / cross-passage | 0.90 / 0.70 |
+| Exact match: numeric / cross-document / comparison | 0.00 / 0.20 / 0.20 |
+| Unanswerable questions correctly declined | 0.70 |
+| Latency median / p95 | 1.7 s / 2.0 s |
+
+Numeric, cross-document and comparison questions are what V2's later phases target.
+
+**V2 documents:** [`CADIS V2.md`](CADIS%20V2.md) (phase plan and the ideas behind it) ·
+[`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) (components, data model, flows) ·
+[`DECISIONS.md`](DECISIONS.md) (why each choice was made) ·
+[`CHECKLIST.md`](CHECKLIST.md) (task progress) ·
+[`COMMIT_HISTORY.md`](COMMIT_HISTORY.md) (what changed when).
+
+---
+
+## Current release (V1)
+
+The rest of this README describes the version that runs today.
 
 ## Architecture
 
@@ -48,11 +164,6 @@ flowchart LR
 
 There is no separate API gateway — the frontend calls FastAPI directly, with CORS
 restricted to localhost plus the origins in `CADIS_FRONTEND_URLS` (or the V1 `FRONTEND_URL`).
-
-> **V2 in progress.** CADIS is being rebuilt for many large documents and cross-document
-> questions. See [`CADIS V2.md`](CADIS%20V2.md) (phase plan), [`CHECKLIST.md`](CHECKLIST.md)
-> (progress), [`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) and [`DECISIONS.md`](DECISIONS.md).
-> Phase 0 (package split, config, tests, evaluation, CI) is in place; the API is still V1.
 
 ### Request Flow
 
