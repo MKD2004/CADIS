@@ -11,6 +11,7 @@ const navItems = [
   { label: "Pipeline", href: "#pipeline" },
   { label: "Modules", href: "#features" },
   { label: "About", href: "#about" },
+  { label: "Library", href: "/library" },
 ]
 
 export function Navbar() {
