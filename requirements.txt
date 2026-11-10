@@ -12,8 +12,13 @@ sentence-transformers>=2.7.0
 spacy>=3.7.0
 scikit-learn>=1.3.0
 
+# ── Storage (V2 Phase 1; DECISIONS ADR-006/007) ─────────────────────────────
+sqlalchemy>=2.0.30
+alembic>=1.13.0
+chromadb>=1.0.0
+
 # ── Document Parsing ─────────────────────────────────────────────────────────
-pypdf>=4.0.0
+pypdf>=4.0.0            # V1 /api/extract
 python-docx>=1.1.0
 
 # ── Data & Utilities ─────────────────────────────────────────────────────────

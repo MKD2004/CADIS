@@ -114,3 +114,55 @@ def make_pdf(text: str) -> bytes:
         out += b"%010d 00000 n \n" % off
     out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
     return bytes(out)
+
+
+class InMemoryVectorStore:
+    """Exact cosine search over a dict — same interface as ChromaVectorStore."""
+
+    def __init__(self):
+        self.rows = {}          # id -> (vector, metadata)
+
+    def upsert(self, records):
+        for r in records:
+            v = np.asarray(r.vector, dtype=float)
+            n = np.linalg.norm(v)
+            self.rows[r.id] = (v / n if n else v, {
+                "document_id": r.document_id, "collection_id": r.collection_id,
+                "version": r.version, "page": r.page, "section_id": r.section_id,
+                "section_path": r.section_path})
+
+    def search(self, vector, allowed_collection_ids, k, document_ids=None, section_paths=None):
+        from cadis.index.vector_store import VectorHit
+        allowed = set(allowed_collection_ids)
+        if not allowed:
+            return []
+        q = np.asarray(vector, dtype=float)
+        q = q / (np.linalg.norm(q) or 1.0)
+        hits = []
+        for cid, (v, m) in self.rows.items():
+            if m["collection_id"] not in allowed:
+                continue
+            if document_ids and m["document_id"] not in document_ids:
+                continue
+            if section_paths and m["section_path"] not in section_paths:
+                continue
+            hits.append(VectorHit(cid, float(v @ q), m["document_id"], m["section_path"]))
+        return sorted(hits, key=lambda h: -h.score)[:k]
+
+    def delete_document(self, document_id, keep_version=None):
+        for cid in [c for c, (_, m) in self.rows.items() if m["document_id"] == document_id
+                    and (keep_version is None or m["version"] != keep_version)]:
+            del self.rows[cid]
+
+    def delete_ids(self, ids):
+        for cid in ids:
+            self.rows.pop(cid, None)
+
+    def ids_for_document(self, document_id):
+        return {c for c, (_, m) in self.rows.items() if m["document_id"] == document_id}
+
+    def all_ids(self):
+        return set(self.rows)
+
+    def count(self):
+        return len(self.rows)

@@ -9,6 +9,7 @@ No other module should call ``os.getenv`` — import ``get_settings()`` instead.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -64,6 +65,46 @@ class Settings(BaseSettings):
     sum_max_tokens: int = Field(1024, validation_alias=_env("SUM_MAX_TOKENS"))      # DistilBART input limit
     sum_chunk_tokens: int = Field(512, validation_alias=_env("SUM_CHUNK_TOKENS"))   # target per chunk
     sum_short_words: int = Field(400, validation_alias=_env("SUM_SHORT_WORDS"))     # single pass at or below
+
+    # ── Storage (Phase 1; DECISIONS ADR-006/007) ───────────────────────────────
+    # SQLite file, ChromaDB folder and original uploads all live under data_dir.
+    data_dir: str = Field("./var", validation_alias=_env("DATA_DIR"))
+    # Empty → sqlite:///<data_dir>/cadis.db
+    database_url: str = Field("", validation_alias=_env("DATABASE_URL"))
+    default_tenant: str = Field("default", validation_alias=_env("DEFAULT_TENANT"))
+    default_user: str = Field("local", validation_alias=_env("DEFAULT_USER"))
+
+    # ── Ingestion ──────────────────────────────────────────────────────────────
+    max_upload_mb: int = Field(25, validation_alias=_env("MAX_UPLOAD_MB"))
+    # Chunks are measured in embedding-model tokens. The effective size is also
+    # capped so that contextual header + chunk fits the embedder (MiniLM: 256).
+    chunk_tokens: int = Field(200, validation_alias=_env("CHUNK_TOKENS"))
+    chunk_overlap_tokens: int = Field(24, validation_alias=_env("CHUNK_OVERLAP"))
+    chunk_header_max_tokens: int = Field(40, validation_alias=_env("CHUNK_HEADER_MAX_TOKENS"))
+    embed_batch_size: int = Field(32, validation_alias=_env("EMBED_BATCH_SIZE"))
+
+    # ── Background jobs (ADR-013) ──────────────────────────────────────────────
+    run_worker: bool = Field(True, validation_alias=_env("RUN_WORKER"))   # in-process worker
+    job_lease_seconds: int = Field(90, validation_alias=_env("JOB_LEASE_SECONDS"))
+    job_heartbeat_seconds: int = Field(20, validation_alias=_env("JOB_HEARTBEAT_SECONDS"))
+    job_poll_seconds: float = Field(1.0, validation_alias=_env("JOB_POLL_SECONDS"))
+    job_recover_seconds: int = Field(30, validation_alias=_env("JOB_RECOVER_SECONDS"))
+    job_max_attempts: int = Field(3, validation_alias=_env("JOB_MAX_ATTEMPTS"))
+
+    @property
+    def sqlalchemy_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+        path = (Path(self.data_dir) / "cadis.db").resolve()
+        return f"sqlite:///{path.as_posix()}"
+
+    @property
+    def files_dir(self) -> Path:
+        return Path(self.data_dir) / "files"
+
+    @property
+    def chroma_dir(self) -> Path:
+        return Path(self.data_dir) / "chroma"
 
     @property
     def cors_origins(self) -> list[str]:
