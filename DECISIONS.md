@@ -54,6 +54,7 @@ Related: [`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) (how it fits together) ·
 | [025](#adr-025--replace-the-ambiguity-heuristic-with-coreference) | Replace the ambiguity heuristic with coreference | Proposed |
 | [026](#adr-026--npm-is-the-only-frontend-package-manager) | npm is the only frontend package manager | Accepted |
 | [027](#adr-027--git-workflow) | Git workflow | Accepted |
+| [028](#adr-028--section-tree-as-a-soft-retrieval-filter) | Section tree as a soft retrieval filter | Accepted |
 
 ---
 
@@ -675,6 +676,82 @@ commit and update `vercel.json`.
 
 **Revisit if** more contributors join — switch to feature branches and pull requests with
 CI required.
+
+---
+
+## ADR-028 — Section tree as a soft retrieval filter
+
+- **Status:** Accepted · **Date:** 2026-11-10 · **Measured by:** Phase 2 and Phase 4 evaluation
+
+**Context.** Many questions point at parts of a document by name: *"Find the dataset
+information from Methodology and the experimental results from Experiments."* With a flat
+list of chunks, both halves of the question compete for the same top 8, one section
+usually wins, and the other half goes unanswered. Chunks that span two headings also mix
+two topics, which blurs their embedding and can put unrelated facts side by side in front
+of the answer model.
+
+An option we considered: replace vector search with a **tree walk**, like folders on a disk
+(document → section → subsection → chunks), letting the system pick a folder and read only
+what is inside.
+
+**Decision.** Keep hybrid search (HNSW dense + BM25, ADR-009) as the engine, and add the
+**section tree as structure around it**:
+
+1. **Ingest builds a section tree** from headings (DOCX heading styles; PDF font size,
+   bold and numbering such as `3.2 Dataset`; TXT short title lines followed by a blank
+   line). It is stored in a `SECTION` table (`parent_id`, `path`, `level`, char range).
+2. **Chunks never cross a section boundary.** A short section becomes one small chunk
+   instead of being merged with its neighbour; overlap does not cross headings either.
+   Each chunk stores `section_id` and `section_path` (`"3 Methodology > 3.2 Dataset"`),
+   also in ChromaDB metadata and FTS5. Text with no headings falls back to paragraph and
+   sentence cuts.
+3. **Section targets are a soft filter, not a hard one.** When a question (or a
+   sub-question from the planner) names a section, the name is resolved against the real
+   section titles (fuzzy match + title embedding, so "Methods" ≈ "Methodology"). Search
+   then runs **with** the section filter and **without** it, and the two lists are merged
+   with RRF, so in-section chunks rank higher but out-of-section chunks can still appear.
+4. **Quota per sub-question:** each sub-question gets its share of the final slots, so
+   one section cannot fill the whole context.
+5. **Whole-section expansion:** if a matched section is small, its full text is given to
+   the answer model (parent-document version of small-to-big).
+6. **No section named → plain hybrid search.** The query planner decides which path a
+   question takes: simple name matching from Phase 2, LLM sub-question planning from
+   Phase 4.
+
+**Why.**
+- **Speed is not the gain.** At ~10,000 chunks, HNSW and even brute force are
+  milliseconds, and one section is only tens of chunks. What structure buys is *precision
+  and coverage* on questions with several targeted parts, and cleaner chunks.
+- **A hard tree walk fails silently.** If the folder is wrong ("dataset" is in
+  "4.1 Experimental Setup", not "Methodology"; another paper says "Methods"), the answer
+  can never be found. Tree walks done by an LLM also cost one call per level, and errors
+  compound. The soft filter keeps the precision and removes the dead end.
+- **Most questions name no section**, so global search must stay the default.
+- Section paths in the contextual header (`"Doc › Section: …"`) also help dense and BM25
+  ranking for ordinary questions.
+
+**Alternatives.**
+- *Pure tree navigation* (LLM walks the table of contents) — rejected for the reasons above.
+- *Hard metadata filter only* — rejected: no recovery when the label is wrong.
+- *Flat chunks only* (no structure) — rejected: mixed-topic chunks, crowding on
+  multi-part questions.
+- *Section summary nodes* (RAPTOR-style: index title + short summary per section) —
+  deferred; add only if the evaluation shows broad "what does section X say" questions
+  failing.
+- *Semantic chunking* (split where neighbouring-sentence similarity drops) — deferred;
+  only for long sections without headings, and only if it measurably helps.
+
+**Consequences.**
+- New `SECTION` table and `section_id` / `section_path` on `CHUNK`, Chroma metadata and
+  FTS5 (ARCHITECTURE_V2 §5).
+- Heading detection is heuristic for PDF/TXT; bad headings degrade to plain hybrid
+  search, never to lost answers.
+- A new evaluation question type, **section-targeted**, tracks this.
+
+**Revisit if** section-targeted questions do no better than plain hybrid search on the
+evaluation set (then drop the filtered search and keep only clean chunking), or if the
+soft boost lets too many out-of-section chunks through (then make the filter harder when
+the section match is very confident).
 
 ---
 

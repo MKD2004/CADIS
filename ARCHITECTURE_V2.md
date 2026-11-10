@@ -39,7 +39,8 @@ where the code lives, and how data moves through the system.
 | Documents | Sent again with every request; never stored | Uploaded once, stored, referenced by ID |
 | Scope | One document | Many documents in **collections**, owned by a **tenant** |
 | Processing | One blocking request runs all 6 modules | Background jobs with progress; results stored |
-| Search | Brute-force MiniLM cosine over 200-word passages | Hybrid: dense vectors (ChromaDB) + BM25 (SQLite FTS5) + RRF + cross-encoder re-rank |
+| Chunks | Fixed-size passages that ignore headings | Section-aware chunks that never cross a heading; each knows its section path |
+| Search | Brute-force MiniLM cosine over 200-word passages | Hybrid: dense vectors (ChromaDB) + BM25 (SQLite FTS5) + RRF + cross-encoder re-rank, with a soft section filter when a question names a section |
 | Answers | Extractive span (RoBERTa-SQuAD2) | Structured claims written by an LLM, each with citations, checked by quote match + entailment; arithmetic done in Python |
 | Results in browser | Whole result in `localStorage` | Fetched from the API per document, per page |
 | Storage | None | SQLite (metadata, chunks, jobs, FTS5) + ChromaDB (vectors) + file store |
@@ -121,7 +122,8 @@ CADIS/
 │   │   ├── ingest/                     # file → clean text → chunks
 │   │   │   ├── parsers.py              #   PDF / DOCX / TXT → pages of text + headings
 │   │   │   ├── cleaning.py             #   headers/footers, hyphenation, line joins
-│   │   │   ├── chunking.py             #   token-based, structure-aware chunks; deterministic IDs
+│   │   │   ├── sections.py             #   headings → section tree (DOCX styles, PDF fonts/numbering, TXT title lines)
+│   │   │   ├── chunking.py             #   token-based chunks inside each section; deterministic IDs
 │   │   │   └── pipeline.py             #   the ingest job: parse → clean → chunk → store → index
 │   │   │
 │   │   ├── index/                      # search indexes (rebuildable from the chunk table)
@@ -131,9 +133,10 @@ CADIS/
 │   │   │
 │   │   ├── retrieval/
 │   │   │   ├── hybrid.py               #   dense + BM25 → Reciprocal Rank Fusion
+│   │   │   ├── sections.py             #   resolve section names; filtered + unfiltered search merged (ADR-028)
 │   │   │   ├── rerank.py               #   cross-encoder re-ranking
 │   │   │   ├── expand.py               #   small-to-big: add neighbour chunks
-│   │   │   └── planner.py              #   query rewrite, multi-hop split, comparison routing (Phase 4)
+│   │   │   └── planner.py              #   query rewrite, multi-hop split, comparison + section routing (Phase 4)
 │   │   │
 │   │   ├── answer/
 │   │   │   ├── extractive.py           #   V1 RoBERTa span code (moved from api_server.py)
@@ -239,6 +242,9 @@ erDiagram
     TENANT ||--o{ MEMBERSHIP : has
     COLLECTION ||--o{ MEMBERSHIP : "shared via"
     COLLECTION ||--o{ DOCUMENT : contains
+    DOCUMENT ||--o{ SECTION : "has headings"
+    SECTION ||--o{ SECTION : "parent of"
+    SECTION ||--o{ CHUNK : contains
     DOCUMENT ||--o{ CHUNK : "split into"
     DOCUMENT ||--o{ ANALYSIS_RESULT : has
     DOCUMENT ||--o{ JOB : "processed by"
@@ -249,7 +255,8 @@ erDiagram
     MEMBERSHIP { string user_id  string collection_id FK  string role }
     COLLECTION { string id PK  string tenant_id FK  string name  datetime created_at }
     DOCUMENT { string id PK  string collection_id FK  string filename  string sha256  int current_version  int pages  string status }
-    CHUNK { string id PK  string document_id FK  string collection_id  int version  int ordinal  int page  string section  int char_start  int char_end  int tokens  text text  string prev_id  string next_id }
+    SECTION { string id PK  string document_id FK  int version  string parent_id FK  string title  string path  int level  int ordinal  int char_start  int char_end }
+    CHUNK { string id PK  string document_id FK  string collection_id  int version  int ordinal  int page  string section_id FK  string section_path  int char_start  int char_end  int tokens  text text  string prev_id  string next_id }
     ANALYSIS_RESULT { string document_id FK  string module  int version  json result  string model_version }
     JOB { string id PK  string type  string document_id FK  string status  float progress  int attempts  int max_attempts  datetime locked_until  string error  datetime updated_at }
     ENTITY { string id PK  string collection_id  string name  string type }
@@ -267,10 +274,16 @@ Notes:
 - **Versions:** a re-upload or re-ingest writes chunks with `version = current_version + 1`,
   then flips `DOCUMENT.current_version`, then deletes the old version. Every search filters
   on the current version.
-- **FTS5 table:** `chunk_fts(chunk_id UNINDEXED, collection_id UNINDEXED, text)`, kept in
-  sync with `CHUNK` by the ingest pipeline (upsert by `chunk_id`).
+- **Sections (ADR-028):** `SECTION` holds each document version's heading tree. IDs are
+  deterministic like chunk IDs (`sha1(document_id : version : "s" : ordinal)`). `path` is
+  the titles joined with `" > "` (`"3 Methodology > 3.2 Dataset"`), so "this section and
+  everything under it" is a prefix test. A document with no headings gets one root section.
+  **A chunk always belongs to exactly one section** — chunks never cross a heading.
+- **FTS5 table:** `chunk_fts(chunk_id UNINDEXED, collection_id UNINDEXED, section_path, text)`,
+  kept in sync with `CHUNK` by the ingest pipeline (upsert by `chunk_id`). Indexing the
+  section path lets BM25 match heading words too.
 - **ChromaDB:** one collection named `chunks`, vector ID = chunk ID, metadata =
-  `{document_id, collection_id, version, page}`.
+  `{document_id, collection_id, version, page, section_id, section_path}`.
 - **File store:** originals saved as `files/<sha256>` so duplicate uploads are detected and
   ingestion can be re-run from the original.
 
@@ -316,12 +329,13 @@ IDs, the second run produces the same final state (section 8).
 ```mermaid
 flowchart TB
     Q["POST /query<br/>{ question, collection_ids, document_ids?, history? }"] --> AUTH["API: intersect requested collections<br/>with the tenant's allowed collections"]
-    AUTH --> RW["Rewrite question using history<br/>(Phase 4: plan multi-hop / comparison)"]
-    RW --> D["Dense search — ChromaDB top 50<br/>filter: collection_id, current version"]
-    RW --> K["Keyword search — FTS5 BM25 top 50<br/>same filter"]
-    D --> F[Reciprocal Rank Fusion]
+    AUTH --> RW["Rewrite question using history<br/>(Phase 4: plan multi-hop / comparison / sections)"]
+    RW --> SR["Section routing (ADR-028)<br/>names a section? → resolve against real titles<br/>one sub-question per target"]
+    SR --> D["Dense search — ChromaDB top 50<br/>filter: collection_id, current version<br/>run with and without section_path filter"]
+    SR --> K["Keyword search — FTS5 BM25 top 50<br/>same filters"]
+    D --> F["Reciprocal Rank Fusion<br/>(in-section hits rank higher)"]
     K --> F
-    F --> CE["Cross-encoder re-rank → top 6–8"]
+    F --> CE["Cross-encoder re-rank → top 6–8<br/>quota per sub-question"]
     CE --> EX["Expand with neighbour chunks<br/>(small-to-big)"]
     EX --> GEN["LLM → JSON claims<br/>each with chunk_id + quote<br/>numbers requested as calculations"]
     GEN --> CALC["Calculator: run requested<br/>expressions in Python (Decimal, unit check)"]
@@ -329,6 +343,12 @@ flowchart TB
     V1 --> V2["Check 2: quote entails claim (NLI)<br/>+ every number appears in a quote or calculation"]
     V2 --> OUT["Response: claims with citations + checks<br/>status: answered / partially_supported / not_in_documents"]
 ```
+
+**Section routing** is a *soft* filter. A question that names no section skips it and gets
+plain hybrid search. When a section is named, the filtered and unfiltered result lists are
+fused, so a wrongly guessed section lowers precision a little but never hides the answer.
+If a matched section is small, the expansion step can pass the whole section to the
+answer model.
 
 **Extractive mode** (V1 behaviour, kept as an option) replaces the three `GEN → V2` steps
 with the RoBERTa span finder over the re-ranked chunks.
@@ -468,14 +488,16 @@ Update this table in the same commit that changes the status.
 | Tenancy: default tenant, `collection_id` everywhere, required filters, isolation test | 1 | Not started |
 | Job queue: states, claim/lease/recover, worker | 1 | Not started |
 | Ingest: parsers, cleaning, chunking, idempotent indexing | 1 | Not started |
+| Section tree (`SECTION`, section-bounded chunks, `section_path` in Chroma + FTS5) | 1 | Not started |
 | New API: collections, documents, jobs | 1 | Not started |
 | Vector store (ChromaDB) + exact baseline | 2 | Not started |
 | Keyword store (FTS5) + hybrid RRF | 2 | Not started |
 | Cross-encoder re-rank | 2 | Not started |
+| Section soft filter (name resolution, filtered + unfiltered RRF) | 2 | Not started |
 | LLM client + structured claims | 3 | Not started |
 | Calculator | 3 | Not started |
 | Verification (quote + NLI + number rule) | 3 | Not started |
-| Query planner (rewrite, multi-hop, comparison) | 4 | Not started |
+| Query planner (rewrite, multi-hop, comparison, section-targeted sub-questions) | 4 | Not started |
 | Analysis rework (stored results, coref, chunked NER, PCA) | 5 | Not started |
 | Production storage, ONNX, auth, limits, monitoring | 6 | Not started |
 | Frontend: library, ask, viewer, API-backed module pages | 1–5 | Not started |

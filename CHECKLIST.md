@@ -73,7 +73,7 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
 
 - [ ] **1.1 Database** — SQLite + SQLAlchemy 2 + Alembic (ADR-006)
   - [ ] `storage/db.py` with WAL, `busy_timeout`, foreign keys on
-  - [ ] `storage/tables.py`: tenant, membership, collection, document, chunk, analysis_result, job, entity, mention (ARCHITECTURE_V2 §5)
+  - [ ] `storage/tables.py`: tenant, membership, collection, document, section, chunk, analysis_result, job, entity, mention (ARCHITECTURE_V2 §5)
   - [ ] `storage/repositories.py` — every content query takes `allowed_collection_ids`
   - [ ] `storage/files.py` — originals saved as `files/<sha256>`
   - [ ] First Alembic migration in `backend/migrations/`
@@ -84,9 +84,16 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
   - [ ] Page number kept for every piece of text
   - [ ] *(optional, later)* OCR with `ocrmypdf` for pages with no text layer
 - [ ] **1.3 Cleaning** (`ingest/cleaning.py`) — repeated headers/footers, page numbers, end-of-line hyphenation, line breaks inside sentences
+- [ ] **1.4a Section tree** (`ingest/sections.py`, ADR-028)
+  - [ ] Heading detection: DOCX heading styles; PDF font size / bold / numbering (`3.2 Dataset`); TXT short title lines followed by a blank line
+  - [ ] `SECTION` rows with `parent_id`, `path` (`"3 Methodology > 3.2 Dataset"`), `level`, char range; deterministic IDs
+  - [ ] No headings → one root section (falls back to plain chunking)
+  - [ ] Unit tests: heading detection on the eval documents (e.g. `energy.txt` → Targets, Generation, Storage, …)
 - [ ] **1.4 Chunking** (`ingest/chunking.py`)
   - [ ] Counted in embedding-model tokens
-  - [ ] Never crosses a heading; cuts at paragraph, then sentence
+  - [ ] Chunks built *inside* each section; never cross a heading (overlap included); short section = one small chunk
+  - [ ] Cuts at paragraph, then sentence
+  - [ ] `section_id` + `section_path` stored on every chunk, in Chroma metadata and in FTS5
   - [ ] ~300–500 tokens, ~10–15% overlap; chunk + header fits the embedding model (startup check)
   - [ ] `prev_id` / `next_id` links stored (small-to-big)
   - [ ] Contextual header (`"Document › Section: …"`) added before embedding
@@ -143,6 +150,12 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
 - [ ] **2.4 Hybrid search + RRF** (`retrieval/hybrid.py`, ADR-009) — top ~50 from each, `1 / (60 + rank)`
 - [ ] **2.5 Cross-encoder re-ranker** (`retrieval/rerank.py`, ADR-010) — `ms-marco-MiniLM-L-6-v2`, keep top 6–8
 - [ ] **2.6 Diversity** — MMR or per-document limit
+- [ ] **2.6a Section soft filter** (`retrieval/sections.py`, ADR-028)
+  - [ ] Resolve section names in the question against real section titles (fuzzy + title embedding; "Methods" ≈ "Methodology")
+  - [ ] Run hybrid search with and without a `section_path` prefix filter; merge with RRF
+  - [ ] Pass a small matched section whole to the answer model
+  - [ ] No section named → plain hybrid search (no change in behaviour)
+  - [ ] Add a **section-targeted** question type to the eval set (~10 questions) and report it in `eval.py`
 - [ ] Small-to-big expansion with neighbour chunks (`retrieval/expand.py`)
 - [ ] **2.7 Use new retrieval in extractive QA first**, to measure retrieval gain alone
 - [ ] Add recall@8 to `eval.py` (`KS` is 1/3/6 today; the done-when below uses recall@8)
@@ -152,6 +165,7 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
 ### Done when
 
 - [ ] recall@8 clearly higher than the Phase 0 baseline
+- [ ] Section-targeted questions find evidence from *every* named section more often with the soft filter than without it (otherwise revisit ADR-028)
 - [ ] A query over ~10,000 chunks returns in about 1 s on the Space's CPU
 
 ---
@@ -206,6 +220,7 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
   - [ ] Multi-hop: sub-questions + iterative retrieval
   - [ ] Comparison: retrieve per named document, then answer with both
   - [ ] Aggregation: map over documents, then reduce; limit + progress
+  - [ ] Section-targeted: one sub-question per named section, soft section filter, quota per sub-question
 - [ ] **4.4 Document summaries as routing layer** (needs Phase 5.6)
 - [ ] **4.5 Entity index** queries over `ENTITY` / `MENTION` (needs Phase 5.4)
 - [ ] **4.6** *(optional, only if eval shows need)* knowledge graph / GraphRAG
@@ -214,7 +229,7 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
 
 ### Done when
 
-- [ ] Multi-hop and comparison questions in the eval set pass at an agreed level
+- [ ] Multi-hop, comparison and section-targeted questions in the eval set pass at an agreed level
 - [ ] Answers cite more than one document when they should
 
 ---

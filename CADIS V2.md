@@ -222,6 +222,41 @@ highlight it.
 | Multi-hop | "Where was the CEO of the company that bought NeuralBase born?" | Split into sub-questions, search for each in turn |
 | Comparison | "How do the payment terms differ between contract A and B?" | Search each document separately, then combine |
 | Aggregation | "List every contract with a late-payment fee." | Run a small question over each document (map), then merge (reduce); later use stored extracted facts |
+| Section-targeted | "Find the dataset information from Methodology and the experimental results from Experiments." | One sub-question per named section, each searched with a soft section filter ([4.9](#49-structure-aware-retrieval-the-section-tree)) |
+
+### 4.9 Structure-aware retrieval (the section tree)
+
+Documents are not flat. A paper has *Methodology* and *Experiments*; a contract has
+*Payment Terms* and *Termination*. V2 keeps that structure as a **section tree**, much like
+folders on a disk:
+
+```
+Paper.pdf
+├── 1 Introduction
+├── 3 Methodology
+│   ├── 3.1 Model
+│   └── 3.2 Dataset          ← chunks live here, path "3 Methodology > 3.2 Dataset"
+└── 4 Experiments
+    └── 4.2 Results
+```
+
+It is used in two ways:
+
+1. **Clean chunks.** A chunk never crosses a heading, so one chunk is about one topic.
+   A short section becomes one small chunk rather than being glued to the next one.
+2. **A soft filter at search time.** When a question names a section, search runs once
+   *inside* that section and once over everything, and the two result lists are merged
+   (RRF). Chunks from the named section rank higher, but a chunk from elsewhere can still
+   win — useful when the "dataset" details actually sit in *4.1 Experimental Setup*, or
+   the paper calls the section *Methods*.
+
+Why not walk the tree instead of using vector search? Two reasons:
+- **Speed is not the problem.** At ~10,000 chunks, HNSW and even brute force answer in
+  milliseconds. What the tree adds is *precision* on questions with several targeted
+  parts, where otherwise one section crowds out the other.
+- **A wrong folder is a dead end.** A hard tree walk can never recover from picking the
+  wrong section, and most questions name no section at all. So hybrid search stays the
+  engine, and the tree guides it. See DECISIONS ADR-028.
 
 ---
 
@@ -330,6 +365,9 @@ erDiagram
     TENANT ||--o{ MEMBERSHIP : has
     COLLECTION ||--o{ MEMBERSHIP : "shared via"
     COLLECTION ||--o{ DOCUMENT : contains
+    DOCUMENT ||--o{ SECTION : "has headings"
+    SECTION ||--o{ SECTION : "parent of"
+    SECTION ||--o{ CHUNK : contains
     DOCUMENT ||--o{ CHUNK : "split into"
     DOCUMENT ||--o{ ANALYSIS_RESULT : has
     CHUNK ||--o{ MENTION : contains
@@ -340,7 +378,8 @@ erDiagram
     MEMBERSHIP { string user_id  string collection_id  string role }
     COLLECTION { string id  string tenant_id  string name }
     DOCUMENT { string id  string collection_id  string filename  string sha256  int version  int pages  string status }
-    CHUNK { string id  string document_id  string collection_id  int version  int page  string section  int char_start  int char_end  int tokens  string text }
+    SECTION { string id  string document_id  int version  string parent_id  string title  string path  int level  int ordinal  int char_start  int char_end }
+    CHUNK { string id  string document_id  string collection_id  int version  int page  string section_id  string section_path  int char_start  int char_end  int tokens  string text }
     ANALYSIS_RESULT { string document_id  string module  json result  string model_version }
     ENTITY { string id  string collection_id  string name  string type }
     MENTION { string entity_id  string chunk_id  int char_start  int char_end }
@@ -357,8 +396,12 @@ erDiagram
 - `model_version` lets you know which results must be recomputed after a model change.
 - `ENTITY` + `MENTION` give you a cross-document entity index ("every document that
   mentions Meridian Corporation").
-- The vector index stores one vector per `CHUNK.id`, with `document_id`, `collection_id`
-  and `page` as metadata so a search can be limited to some documents.
+- The vector index stores one vector per `CHUNK.id`, with `document_id`, `collection_id`,
+  `page` and `section_id` / `section_path` as metadata so a search can be limited to some
+  documents or boosted toward a section.
+- `SECTION` is the document's heading tree ([4.9](#49-structure-aware-retrieval-the-section-tree)).
+  `path` (`"3 Methodology > 3.2 Dataset"`) lets a filter match a section *and* everything
+  under it with one prefix test.
 
 ### 5.4 New API
 
@@ -568,7 +611,13 @@ Tasks:
    hyphens at line ends, fix line breaks inside sentences.
 4. **Chunking.**
    - Count in **tokens** of the embedding model, not words.
-   - Respect structure: do not cross a heading; prefer to cut at paragraph, then sentence.
+   - **Build the section tree first** ([4.9](#49-structure-aware-retrieval-the-section-tree)):
+     headings from DOCX styles, PDF font size / bold / numbering (`3.2 Dataset`), and TXT
+     title lines; store them in `SECTION`.
+   - Respect structure: chunk *inside* each section and never cross a heading (overlap
+     included); a short section becomes one small chunk. Prefer to cut at paragraph, then
+     sentence. Text without headings falls back to paragraph and sentence cuts.
+   - Store `section_id` and `section_path` on every chunk.
    - Size ~300–500 tokens with ~10–15% overlap.
    - **Small-to-big:** search with small chunks, but give the answer model the chunk plus
      its neighbours (stored `prev`/`next` links). Search stays precise, and the answer
@@ -630,7 +679,13 @@ Tasks:
    top 6–8.
 6. **Diversity.** Avoid returning 6 chunks from the same page that say the same thing
    (for example, Maximal Marginal Relevance, or a limit per document for broad questions).
-7. **Use the new retrieval in today's extractive QA** first. That way you can measure
+7. **Section soft filter** ([4.9](#49-structure-aware-retrieval-the-section-tree),
+   ADR-028). If a question names a section, resolve the name against the document's real
+   section titles (fuzzy match + title embedding, so "Methods" ≈ "Methodology"), run hybrid
+   search with and without a `section_path` prefix filter, and merge both with RRF. A small
+   matched section can be passed whole to the answer model. No section named → plain
+   hybrid search.
+8. **Use the new retrieval in today's extractive QA** first. That way you can measure
    the gain from retrieval alone, before the LLM is added.
 
 **Done when:** on the evaluation set, *recall@8* (the right chunk is in the top 8) is
@@ -747,6 +802,10 @@ Tasks:
      both sets of sources.
    - *Aggregation:* run a small extraction over each document (map), then merge (reduce).
      Limit how many documents this touches, and show progress.
+   - *Section-targeted:* split into one sub-question per named section, e.g.
+     `[{q: "dataset information", section: "Methodology"}, {q: "experimental results",
+     section: "Experiments"}]`. Each sub-question uses the Phase 2 soft section filter and
+     gets its own share of the final chunks, so one section cannot crowd out the other.
 4. **Document summaries as a routing layer.** At ingest, store a short summary per
    document (Phase 5 produces it). For broad questions ("Which documents talk about
    data privacy?"), first search the summaries to pick documents, then search chunks
@@ -866,6 +925,7 @@ Include all question types, in roughly equal numbers:
 | Cross-document | facts in two different documents |
 | Comparison | "Which contract has the longer notice period?" |
 | Unanswerable | a question the documents do not answer |
+| Section-targeted | "From *Storage*, what is Harlow Ridge's capacity, and from *Extreme Weather*, what was the peak demand?" |
 
 ### 7.2 Public datasets (for extra checks)
 
