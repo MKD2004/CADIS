@@ -14,7 +14,14 @@ RUN python -m spacy download en_core_web_sm
 # the HuggingFace Spaces image build past its timeout. Models are fetched on
 # first request instead, which is why the first call after a cold start is slow.
 COPY backend/cadis ./backend/cadis
+COPY backend/migrations ./backend/migrations
 ENV PYTHONPATH=/app/backend
+
+# V2 storage (SQLite, ChromaDB, original uploads). HF Spaces runs the container
+# as a non-root user, so /app is not writable; /tmp is, but it is wiped on every
+# restart. Point this at /data when Space persistent storage is enabled
+# (DECISIONS ADR-020).
+ENV CADIS_DATA_DIR=/tmp/cadis-data
 
 EXPOSE 7860
 

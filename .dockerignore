@@ -1,4 +1,4 @@
-# Keep the build context small; the image only needs requirements.txt and backend/cadis.
+# Keep the build context small; the image only needs requirements.txt, backend/cadis and backend/migrations.
 .git
 client
 data
