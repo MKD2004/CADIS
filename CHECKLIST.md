@@ -67,71 +67,79 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
 
 ---
 
-## Phase 1 — Ingestion and storage  *(effort L)*
+## Phase 1 — Ingestion and storage  *(effort L)* — **done** (2026-11-10)
+
+Committed as `d870a4d` (storage) → `60e9bb2` (jobs) → `0051287` (ingest) → `42b48be` (API) → `2991521` (Library page).
+All four **Done when** checks were run on a live server (results below).
 
 ### Tasks
 
-- [ ] **1.1 Database** — SQLite + SQLAlchemy 2 + Alembic (ADR-006)
-  - [ ] `storage/db.py` with WAL, `busy_timeout`, foreign keys on
-  - [ ] `storage/tables.py`: tenant, membership, collection, document, section, chunk, analysis_result, job, entity, mention (ARCHITECTURE_V2 §5)
-  - [ ] `storage/repositories.py` — every content query takes `allowed_collection_ids`
-  - [ ] `storage/files.py` — originals saved as `files/<sha256>`
-  - [ ] First Alembic migration in `backend/migrations/`
-  - [ ] `CADIS_DATA_DIR` / `CADIS_DATABASE_URL` settings; data dir in `.gitignore`
-- [ ] **1.2 Better parsing** (`ingest/parsers.py`)
-  - [ ] PDF via PyMuPDF: text per page + font sizes for headings (ADR-016)
-  - [ ] DOCX (python-docx) and TXT keep page/section info where possible
-  - [ ] Page number kept for every piece of text
-  - [ ] *(optional, later)* OCR with `ocrmypdf` for pages with no text layer
-- [ ] **1.3 Cleaning** (`ingest/cleaning.py`) — repeated headers/footers, page numbers, end-of-line hyphenation, line breaks inside sentences
-- [ ] **1.4a Section tree** (`ingest/sections.py`, ADR-028)
-  - [ ] Heading detection: DOCX heading styles; PDF font size / bold / numbering (`3.2 Dataset`); TXT short title lines followed by a blank line
-  - [ ] `SECTION` rows with `parent_id`, `path` (`"3 Methodology > 3.2 Dataset"`), `level`, char range; deterministic IDs
-  - [ ] No headings → one root section (falls back to plain chunking)
-  - [ ] Unit tests: heading detection on the eval documents (e.g. `energy.txt` → Targets, Generation, Storage, …)
-- [ ] **1.4 Chunking** (`ingest/chunking.py`)
-  - [ ] Counted in embedding-model tokens
-  - [ ] Chunks built *inside* each section; never cross a heading (overlap included); short section = one small chunk
-  - [ ] Cuts at paragraph, then sentence
-  - [ ] `section_id` + `section_path` stored on every chunk, in Chroma metadata and in FTS5
-  - [ ] ~300–500 tokens, ~10–15% overlap; chunk + header fits the embedding model (startup check)
-  - [ ] `prev_id` / `next_id` links stored (small-to-big)
-  - [ ] Contextual header (`"Document › Section: …"`) added before embedding
-  - [ ] Deterministic IDs: `sha1(document_id : version : ordinal)`
-- [ ] **1.5 Background jobs** (`jobs/states.py`, `jobs/queue.py`, `jobs/worker.py`, ADR-013)
-  - [ ] States `PENDING → PROCESSING → COMPLETED / FAILED`
-  - [ ] Atomic claim with lease (`locked_until`)
-  - [ ] Heartbeat extends lease and writes `progress`
-  - [ ] Recovery of expired leases at startup and every minute
-  - [ ] Retries up to `max_attempts`; `error` saved; manual retry from `FAILED`
-  - [ ] Progress stages: parsing → chunking → embedding → indexing → analysis
-  - [ ] In-process worker started with the app
-- [ ] **1.6 Idempotent writes** (ADR-014)
-  - [ ] Upserts everywhere (SQLite, FTS5, ChromaDB) — never plain inserts
-  - [ ] Document versions: write new → flip `current_version` → delete old
-  - [ ] Write order: chunks → FTS5 → ChromaDB → flip version → delete old → job `COMPLETED` last
-  - [ ] `backend/scripts/check_consistency.py` compares and repairs from SQLite
-- [ ] **1.7 Access control in the data model** (ADR-015)
-  - [ ] Default tenant created on startup
-  - [ ] `collection_id` on every content row (document, chunk, vector metadata, FTS row, entity)
-  - [ ] Retrieval interface requires allowed collection IDs: `search(question, allowed_collection_ids, document_ids=None)`
-  - [ ] Allowed list computed server-side in `api/deps.py`, never from the request body
-- [ ] **1.8 New endpoints** (`api/collections.py`, `api/documents.py`, `api/jobs.py`, `api/schemas.py`)
-  - [ ] `POST /collections` · `GET /collections`
-  - [ ] `POST /collections/{id}/documents` → `202` + `[{document_id, job_id}]`
-  - [ ] `GET /documents/{id}` · `DELETE /documents/{id}` (removes chunks, vectors, FTS rows, results)
-  - [ ] `GET /jobs/{id}` · `GET /jobs/{id}/events` (SSE)
-  - [ ] Errors use `{ "detail": … }` with real status codes
-- [ ] **1.9 Duplicate check** by file hash
-- [ ] **Frontend:** Library page — collections, multi-file upload, per-document status (`client/app/library/`, `client/lib/api.ts`)
-- [ ] **Tests:** `tests/integration/` with real SQLite + ChromaDB in a temp dir
+- [x] **1.1 Database** — SQLite + SQLAlchemy 2 + Alembic (ADR-006)
+  - [x] `storage/db.py` with WAL, `busy_timeout`, foreign keys on
+  - [x] `storage/tables.py`: tenant, membership, collection, document, document_text, section, chunk, analysis_result, job, entity, mention (ARCHITECTURE_V2 §5)
+  - [x] `storage/repositories.py` — every content query takes `allowed_collection_ids` (no default; `None` raises)
+  - [x] `storage/files.py` — originals saved as `files/<sha256>`
+  - [x] First Alembic migration in `backend/migrations/` (run at startup by `init_db`)
+  - [x] `CADIS_DATA_DIR` / `CADIS_DATABASE_URL` settings; data dir in `.gitignore`
+- [x] **1.2 Better parsing** (`ingest/parsers.py`, `parse_document`)
+  - [x] PDF via PyMuPDF: text per page + font sizes and bold for headings (ADR-016)
+  - [x] DOCX heading styles and tables in reading order; TXT blocks, form-feed pages, Markdown `#`
+  - [x] Page number kept for every block, section and chunk
+  - [ ] *(optional, later)* OCR with `ocrmypdf` for pages with no text layer — scanned PDFs currently fail with "no text found"
+- [x] **1.3 Cleaning** (`ingest/cleaning.py`) — repeated headers/footers, page numbers, end-of-line hyphenation, line breaks inside sentences (list items kept), paragraphs split by a page break
+- [x] **1.4a Section tree** (`ingest/sections.py`, ADR-028)
+  - [x] Heading detection: DOCX heading styles; PDF font size / bold / numbering (`3.2 Dataset`); TXT short title lines followed by text
+  - [x] `SECTION` rows with `parent_id`, `path` (`"3 Methodology > 3.2 Dataset"`), `level`, char range; deterministic IDs
+  - [x] No headings → one root section (falls back to plain chunking)
+  - [x] Unit tests: heading detection on the eval documents (`energy.txt` → Foreword, Targets, Generation, Storage, …)
+- [x] **1.4 Chunking** (`ingest/chunking.py`)
+  - [x] Counted in embedding-model tokens
+  - [x] Chunks built *inside* each section; never cross a heading (overlap included); short section = one small chunk
+  - [x] Cuts at sentence ends, preferring paragraph ends; over-long sentences cut at words
+  - [x] `section_id` + `section_path` stored on every chunk, in Chroma metadata and in FTS5
+  - [~] Size: **200 tokens max, 24 overlap** (not 300–500) because MiniLM reads only 256 tokens; the budget also shrinks per section so header + chunk always fit. The check runs at ingest time (needs the loaded model), not at app startup. Raise `CADIS_CHUNK_TOKENS` when Phase 2 moves to a 512-token model (ADR-011).
+  - [x] `prev_id` / `next_id` links stored (small-to-big)
+  - [x] Contextual header (`"Document › Section › Subsection"`) added before embedding
+  - [x] Deterministic IDs: `sha1(document_id : version : ordinal)`
+- [x] **1.5 Background jobs** (`jobs/states.py`, `jobs/queue.py`, `jobs/worker.py`, ADR-013)
+  - [x] States `PENDING → PROCESSING → COMPLETED / FAILED`
+  - [x] Atomic claim with lease (`locked_until`, `locked_by`); later updates fenced by owner
+  - [x] Heartbeat thread extends the lease; handlers write stage + `progress`
+  - [x] Recovery of expired leases at startup and every 30 s (lease 90 s, heartbeat 20 s)
+  - [x] Retries up to `max_attempts`; `error` saved; permanent errors fail at once; manual retry from `FAILED`
+  - [~] Progress stages: parsing → chunking → storing → embedding → indexing. The *analysis* stage comes with Phase 5.1.
+  - [x] In-process worker started with the app
+- [x] **1.6 Idempotent writes** (ADR-014)
+  - [x] Upserts everywhere (SQLite `ON CONFLICT DO UPDATE`, ChromaDB `upsert`); FTS5 follows `chunk` through triggers in the same transaction
+  - [x] Document versions: write new → flip `current_version` → delete old
+  - [x] Write order: text + sections + chunks (+ FTS5) → ChromaDB → flip version → delete old → job `COMPLETED` last
+  - [x] `backend/scripts/check_consistency.py` compares and repairs from SQLite (`--repair`)
+- [x] **1.7 Access control in the data model** (ADR-015)
+  - [x] Default tenant created on startup
+  - [x] `collection_id` on every content row (document, section, chunk, vector metadata, entity); FTS rows join through `chunk`
+  - [x] Retrieval requires allowed collection IDs: `retrieval/search.py` `dense_search` / `keyword_search(question, allowed_collection_ids, k, document_ids=None)`
+  - [x] Allowed list computed server-side in `api/deps.py`, never from the request body
+- [x] **1.8 New endpoints** (`api/collections.py`, `api/documents.py`, `api/jobs.py`, `api/schemas.py`)
+  - [x] `POST /collections` · `GET /collections` · `GET /collections/{id}` · `GET /collections/{id}/documents`
+  - [x] `POST /collections/{id}/documents` → `202` + `[{document_id, job_id, duplicate}]`
+  - [x] `GET /documents/{id}` · `DELETE /documents/{id}` (removes text, sections, chunks, vectors, FTS rows, results, jobs)
+  - [x] Extra: `GET /documents/{id}/sections`, `POST /documents/{id}/reingest`, `POST /jobs/{id}/retry`
+  - [x] `GET /jobs/{id}` · `GET /jobs/{id}/events` (SSE)
+  - [x] Errors use `{ "detail": … }` with real status codes (404, 409, 413, 415, 422, 503)
+- [x] **1.9 Duplicate check** by file hash (same bytes in the same collection → existing document)
+- [x] **Frontend:** Library page — collections, multi-file upload, live per-document status over SSE, section tree (`client/app/library/`, `client/lib/api.ts`)
+- [x] **Tests:** `tests/integration/` with real SQLite + ChromaDB in a temp dir (crash recovery, tenant isolation); 156 tests in total
 
 ### Done when
 
-- [ ] Upload 20 PDFs of 100+ pages, close the browser, come back — all present with status "ready"
-- [ ] Kill the server mid-ingestion, restart — interrupted jobs finish by themselves with **no duplicate chunks or vectors** (counts match in SQLite and ChromaDB)
-- [ ] Deleting a document removes its chunks, vectors and BM25 entries
-- [ ] Two-tenant isolation test passes
+- [x] Upload 20 PDFs of 100+ pages, close the browser, come back — all present with status "ready"
+  — 20 generated PDFs × 105 pages, one upload (202 in 0.3 s): all READY after 73 s on a CPU laptop; 2,683 chunks; running headers and page numbers removed; ~71 sections per document found from fonts.
+- [x] Kill the server mid-ingestion, restart — interrupted jobs finish by themselves with **no duplicate chunks or vectors**
+  — killed at 51 % of embedding; after restart the job was recovered and finished on attempt 2; 243 chunk rows = 243 IDs = 243 FTS rows = 243 vectors, `check_consistency.py` clean. Also covered by `tests/integration/test_ingest_recovery.py` (crash at storing / embedding / indexing).
+- [x] Deleting a document removes its chunks, vectors and BM25 entries — `test_delete_removes_chunks_vectors_fts_and_file`
+- [x] Two-tenant isolation test passes — `tests/integration/test_tenant_isolation.py` (search + every endpoint)
+
+Not part of the done-when, worth knowing: search over the 2,683 chunks took ~25 ms (dense) and ~7 ms (BM25) median.
 
 ---
 
@@ -140,6 +148,7 @@ Committed as `4c57fab` → `a91a548`, docs in `68382dc`, evaluation set expanded
 ### Tasks
 
 - [ ] **2.1 Embedding model upgrade** — compare MiniLM vs `bge-small-en-v1.5` vs `bge-base-en-v1.5` on the eval set; record result in ADR-011 (query instruction prefix for BGE; model ID stored with vectors)
+  - [ ] If a 512-token model wins: raise `CADIS_CHUNK_TOKENS` (~384, now 200 for MiniLM) and re-ingest; the Chroma collection refuses a different model ID, so start a fresh data dir or re-index
 - [ ] **2.2 Persistent vector store** (`index/vector_store.py`, ADR-007)
   - [ ] `VectorStore` interface + ChromaDB (embedded, on disk) implementation
   - [ ] One Chroma collection `chunks`, metadata `document_id`, `collection_id`, `version`, `page`

@@ -282,6 +282,15 @@ BM25; option after ADR-020).
 **Consequences.** FTS5's `bm25()` returns **lower = better** (negative numbers) — convert
 before fusing. Check at startup that the SQLite build has FTS5 enabled.
 
+**Update 2026-11-10 (Phase 1, `d870a4d`).** Built as an **external-content** FTS5 table
+(`content='chunk'`) indexing `section_path` and `text`, kept in step with `chunk` by
+insert/update/delete **triggers** in the same transaction. So there is no separate FTS
+upsert or delete in the code, and SQLite and BM25 cannot drift apart. Two rules follow:
+write chunks with `INSERT … ON CONFLICT DO UPDATE` (never `INSERT OR REPLACE`, which
+skips the delete trigger), and count index rows with `chunk_fts_docsize` (a plain
+`count(*)` on `chunk_fts` reads the content table). User questions are turned into quoted
+OR-terms, so no input can cause an FTS5 syntax error.
+
 **Revisit if** the database moves to Postgres (ADR-020).
 
 ---
@@ -339,6 +348,13 @@ Compare against MiniLM and `bge-base-en-v1.5` on the evaluation set before accep
 - Changing the model means **re-embedding every chunk** — store the model ID with the
   vectors so a mismatch is detected.
 
+**Update 2026-11-10 (Phase 1).** While MiniLM is in use, chunks are capped at
+**200 tokens** (`CADIS_CHUNK_TOKENS`), and each section's budget shrinks further so that
+the contextual header plus chunk fits 256 tokens. Measured on the eval set: largest chunk
+196 tokens. When this ADR is decided for a 512-token model, raise `CADIS_CHUNK_TOKENS`
+(~384) and re-ingest. The Chroma collection records the model ID and refuses to open
+with a different one.
+
 **Revisit if** a better small model appears or multilingual documents are needed.
 
 ---
@@ -382,6 +398,13 @@ states.
 **Alternatives.** FastAPI `BackgroundTasks` alone (lost on restart). Celery/RQ + Redis
 now (extra services before they are needed).
 
+**Update 2026-11-10 (Phase 1, `60e9bb2`).** Lease **90 s**, heartbeat thread every
+**20 s**, recovery at startup and every **30 s** (all `CADIS_JOB_*`). A short lease means
+a job interrupted by a crash resumes within about two minutes of the restart; measured:
+107 s. Every update after the claim is fenced by `locked_by`, so a worker that lost its
+lease cannot overwrite the new owner's state. `PermanentJobError` skips retries for
+errors that cannot fix themselves (unreadable file, no text).
+
 **Revisit if** jobs need more parallelism than one container gives, or must run on
 separate machines.
 
@@ -399,8 +422,10 @@ SQLite, FTS5 and ChromaDB are separate stores with no shared transaction.
 - Every write is an **upsert** by ID (SQLite, FTS5, ChromaDB) — never a plain insert.
 - Re-ingest writes a **new version**, flips `document.current_version` only when all
   writes succeed, then deletes the old version. Searches filter on the current version.
-- Write order: SQLite chunks → FTS5 → ChromaDB → flip version → delete old →
-  job `COMPLETED` **last**.
+- Write order (as built in Phase 1): clear the target version → text + sections + chunks
+  in one SQLite transaction (FTS5 follows by trigger, ADR-008) → ChromaDB → flip version →
+  delete old versions → job `COMPLETED` **last**. (The plan had FTS5 as a separate step
+  after the chunks; with triggers it is written together with them.)
 - `scripts/check_consistency.py` compares IDs across the three stores and repairs from
   SQLite (the source of truth).
 

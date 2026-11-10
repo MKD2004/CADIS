@@ -13,8 +13,11 @@ through each stage in an interactive Next.js dashboard.
 
 > **CADIS V2 is in progress.** V2 turns CADIS from a single-document demo into a system
 > that stores **many large documents** and answers questions **across** them, with cited,
-> checked answers. Phase 0 (foundation) is done; the running app is still V1.
-> Jump to [CADIS V2](#cadis-v2--many-documents-cited-answers) for the design and roadmap.
+> checked answers. Phases 0–1 are done: documents can now be uploaded into collections,
+> stored and processed in the background (see the [Library](#try-the-v2-library-phase-1)).
+> Answering questions across them comes in Phases 2–4; the six-module analysis app is
+> still V1. Jump to [CADIS V2](#cadis-v2--many-documents-cited-answers) for the design
+> and roadmap.
 
 ---
 
@@ -92,12 +95,43 @@ hybrid search. HNSW stays the search engine; the tree guides it
 | Phase | Goal | Status |
 |---|---|---|
 | 0 — Foundation | Package split, config, tests, evaluation set, CI, V1 scale fixes | ✅ Done |
-| 1 — Ingestion and storage | Stored collections, background jobs, section tree, section-aware chunking, tenancy | Next |
-| 2 — Better retrieval | Better embeddings, ChromaDB + BM25 hybrid, re-ranker, section soft filter | Planned |
+| 1 — Ingestion and storage | Stored collections, background jobs, section tree, section-aware chunking, tenancy, Library page | ✅ Done |
+| 2 — Better retrieval | Better embeddings, ChromaDB + BM25 hybrid, re-ranker, section soft filter | Next |
 | 3 — Generated answers | LLM claims with citations, two checks, Python calculator | Planned |
 | 4 — Cross-document | Query planner: multi-hop, comparison, section-targeted sub-questions | Planned |
 | 5 — Analysis rework | Stored per-document results, coreference, entity index | Planned |
 | 6 — Scale and deploy | Persistent storage, ONNX on CPU, auth, limits, monitoring | Planned |
+
+### Try the V2 Library (Phase 1)
+
+Start the backend and frontend as in [Getting Started](#getting-started), then open
+[http://localhost:3000/library](http://localhost:3000/library):
+
+1. Create a collection and drop in PDF, DOCX or TXT files (several at once).
+2. The upload returns immediately; each file becomes a background job. Status and
+   progress update live (parsing → finding sections → saving → embedding → indexing),
+   and ingestion keeps going if you close the page.
+3. Expand a document to see the **section tree** that was found, with chunk counts.
+4. Re-ingest (creates a new version), retry a failed job, or delete a document; deleting
+   removes its chunks, vectors and keyword-index entries.
+
+The same through the API:
+
+```bash
+curl -X POST localhost:8000/collections -H "Content-Type: application/json" -d '{"name":"Contracts"}'
+curl -X POST localhost:8000/collections/<collection_id>/documents -F files=@a.pdf -F files=@b.docx   # 202
+curl -N localhost:8000/jobs/<job_id>/events          # live progress (Server-Sent Events)
+curl localhost:8000/documents/<document_id>/sections # the section tree
+```
+
+Measured on a CPU laptop: 20 PDFs × 105 pages uploaded in one request were all ready
+after 73 s (2,683 chunks). A server killed in the middle of ingestion finished the
+interrupted job by itself after a restart, with no duplicate chunks or vectors.
+
+Data is stored under `CADIS_DATA_DIR` (default `./var`): `cadis.db` (SQLite with the FTS5
+keyword index), `chroma/` (vectors) and `files/` (original uploads). On HF Spaces this is
+`/tmp/cadis-data`, which is **wiped on restart** until persistent storage is chosen
+([ADR-020](DECISIONS.md#adr-020--production-storage)).
 
 ### Measuring progress
 
@@ -127,7 +161,8 @@ Numeric, cross-document and comparison questions are what V2's later phases targ
 
 ## Current release (V1)
 
-The rest of this README describes the version that runs today.
+The rest of this README describes the V1 analysis app (six modules over one document),
+which still runs next to the new V2 API.
 
 ## Architecture
 
@@ -308,11 +343,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ```bash
 pip install -r requirements-dev.txt            # pytest + httpx, on top of requirements.txt
-pytest backend                                 # unit tests with fake models (seconds)
+pytest backend                                 # unit + integration tests, fake models (~20 s)
 pytest backend -m slow                         # real models (downloads ~2 GB on first run)
 python backend/scripts/eval.py                 # retrieval + answer quality on data/eval
 python backend/scripts/eval.py --save phaseN   # also write data/eval/results/phaseN.json
+python backend/scripts/check_consistency.py    # SQLite vs ChromaDB vs FTS5 (--repair to fix)
 ```
+
+Integration tests (`backend/tests/integration/`) use a real SQLite and ChromaDB in a temp
+folder: they crash ingestion at several points and check that recovery leaves no
+duplicates, and that two tenants never see each other's documents. Tests never write to
+`./var`.
 
 CI (`.github/workflows/ci.yml`) runs the unit tests, `npx tsc --noEmit` and
 `npm run build` on every push to `main`.
@@ -331,9 +372,14 @@ brackets are still accepted.
 | `CADIS_SUM_MODEL` (`SUM_MODEL`) | Backend | Summarization model |
 | `CADIS_NER_MODEL` (`NER_MODEL`) | Backend | NER model |
 | `CADIS_EMB_MODEL` (`EMB_MODEL`) | Backend | Embedding model |
+| `CADIS_DATA_DIR` | Backend | V2 storage folder: SQLite, ChromaDB, uploads (default `./var`) |
+| `CADIS_DATABASE_URL` | Backend | Override the database (default SQLite in the data dir) |
+| `CADIS_MAX_UPLOAD_MB` | Backend | Upload size limit per file (default 25) |
+| `CADIS_CHUNK_TOKENS` / `CADIS_CHUNK_OVERLAP` | Backend | Chunk size and overlap in embedding tokens (default 200 / 24) |
+| `CADIS_RUN_WORKER` | Backend | Start the background job worker with the app (default `true`) |
 
-Tuning values (passage size, QA window, NER window, summary chunk size, …) are listed in
-`config.py`, each overridable the same way.
+Tuning values (passage size, QA window, NER window, summary chunk size, job leases, …)
+are listed in `config.py`, each overridable the same way.
 
 ---
 
@@ -345,6 +391,16 @@ Tuning values (passage size, QA window, NER window, summary chunk size, …) are
 | `/api/extract` | POST | `multipart/form-data` file | `{ text, chars, words }` |
 | `/api/process` | POST | `{ text }` | All six module results |
 | `/api/qa-ask` | POST | `{ text, question }` | `{ question, answer, confidence, start, end }` |
+| **V2** `/collections` | POST · GET | `{ name }` | Create / list collections |
+| `/collections/{id}/documents` | POST · GET | multipart `files` (several) | `202` + `[{ document_id, job_id, duplicate }]` · documents with status |
+| `/documents/{id}` | GET · DELETE | — | Document info with latest job · delete everything derived from it |
+| `/documents/{id}/sections` | GET | — | Section tree of the current version |
+| `/documents/{id}/reingest` | POST | — | `202` + new job (new version) |
+| `/jobs/{id}` · `/jobs/{id}/events` | GET | — | Job state · live progress (SSE) |
+| `/jobs/{id}/retry` | POST | — | Re-queue a failed job |
+
+V2 errors use `{ "detail": … }` with real status codes. Full design:
+[`ARCHITECTURE_V2.md` §9](ARCHITECTURE_V2.md#9-api).
 
 ---
 
@@ -354,15 +410,20 @@ Tuning values (passage size, QA window, NER window, summary chunk size, …) are
 CADIS/
 ├── backend/
 │   ├── cadis/              # FastAPI backend package
-│   │   ├── main.py         # app factory: routers + CORS
+│   │   ├── main.py         # app factory: routers, CORS, startup (migrations, worker)
 │   │   ├── config.py       # all settings (pydantic-settings)
-│   │   ├── api/            # health + V1 endpoints (legacy.py)
+│   │   ├── api/            # V2 collections / documents / jobs, health, V1 endpoints (legacy.py)
 │   │   ├── analysis/       # the six modules: preprocessing, embeddings view, NER, ambiguity, summary
 │   │   ├── answer/         # extractive QA (RoBERTa span decoding, passage cache)
-│   │   ├── ingest/         # file parsers (PDF / DOCX / TXT)
+│   │   ├── ingest/         # parse → clean → section tree → chunks; ingest job, upload service
+│   │   ├── index/          # VectorStore (ChromaDB) and FTS5 keyword search
+│   │   ├── retrieval/      # tenant-scoped search (hybrid + re-rank in Phase 2)
+│   │   ├── jobs/           # database-backed job queue and worker
+│   │   ├── storage/        # SQLAlchemy tables, repositories, file store
 │   │   └── models/         # registry.py — the only place models are loaded
-│   ├── tests/              # unit/ (fake models) and slow/ (real models)
-│   ├── scripts/            # benchmark.py, eval.py
+│   ├── migrations/         # Alembic (run automatically at startup)
+│   ├── tests/              # unit/ (fakes), integration/ (real SQLite + ChromaDB), slow/ (real models)
+│   ├── scripts/            # benchmark.py, eval.py, check_consistency.py
 │   └── pyproject.toml      # pytest configuration
 ├── api_server.py           # compatibility shim: from cadis.main import app
 ├── Dockerfile              # HuggingFace Spaces image (CPU torch; models fetched on first use)
@@ -372,10 +433,11 @@ CADIS/
 ├── client/                 # Next.js 16 frontend
 │   ├── app/
 │   │   ├── page.tsx        # Landing page
-│   │   ├── launch/         # Upload / paste / sample + pipeline runner
+│   │   ├── launch/         # Upload / paste / sample + pipeline runner (V1)
+│   │   ├── library/        # V2: collections, uploads, ingest progress, section trees
 │   │   └── pipeline/       # One page per module
 │   ├── components/         # Landing sections + shadcn/ui primitives
-│   └── lib/utils.ts        # Tailwind className helper (cn)
+│   └── lib/                # api.ts (typed V2 client), utils.ts (cn)
 └── data/
     ├── ambiguity_dataset.csv
     └── eval/               # evaluation documents, questions and saved results

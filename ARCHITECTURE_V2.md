@@ -7,8 +7,10 @@ where the code lives, and how data moves through the system.
 - **What** gets built in which order → [`CADIS V2.md`](CADIS%20V2.md) (the phase plan)
 - **What changed and when** → [`COMMIT_HISTORY.md`](COMMIT_HISTORY.md)
 
-> **Status: target design.** As of 2026-11-10 the V1 code has been moved into
-> `backend/cadis/` (Phase 0), but the API is still V1 (`/api/*` from `api/legacy.py`).
+> **Status: partly built.** As of 2026-11-10, Phases 0 and 1 are done: the V1 code lives in
+> `backend/cadis/`, and V2 storage, ingestion, background jobs and the collections /
+> documents / jobs API run next to the V1 endpoints (`/api/*` from `api/legacy.py`).
+> Retrieval for answers (Phase 2) and generated answers (Phase 3) are not built yet.
 > Section [11](#11-implementation-status) tracks what exists. Update that table as parts
 > are built; task-level progress is in [`CHECKLIST.md`](CHECKLIST.md).
 
@@ -124,14 +126,17 @@ CADIS/
 │   │   │   ├── cleaning.py             #   headers/footers, hyphenation, line joins
 │   │   │   ├── sections.py             #   headings → section tree (DOCX styles, PDF fonts/numbering, TXT title lines)
 │   │   │   ├── chunking.py             #   token-based chunks inside each section; deterministic IDs
-│   │   │   └── pipeline.py             #   the ingest job: parse → clean → chunk → store → index
+│   │   │   ├── pipeline.py             #   the ingest job: parse → clean → chunk → store → index
+│   │   │   ├── service.py              #   upload checks + duplicate detection, re-ingest, delete
+│   │   │   └── consistency.py          #   compare/repair SQLite vs ChromaDB vs FTS5
 │   │   │
 │   │   ├── index/                      # search indexes (rebuildable from the chunk table)
 │   │   │   ├── vector_store.py         #   VectorStore interface + ChromaDB implementation
 │   │   │   ├── exact.py                #   brute-force NumPy search (baseline / tests)
-│   │   │   └── keyword_store.py        #   KeywordStore interface + SQLite FTS5 implementation
+│   │   │   └── keyword_store.py        #   FTS5 query building + search (index kept by triggers)
 │   │   │
 │   │   ├── retrieval/
+│   │   │   ├── search.py               #   (Phase 1) tenant-scoped dense and keyword search
 │   │   │   ├── hybrid.py               #   dense + BM25 → Reciprocal Rank Fusion
 │   │   │   ├── sections.py             #   resolve section names; filtered + unfiltered search merged (ADR-028)
 │   │   │   ├── rerank.py               #   cross-encoder re-ranking
@@ -242,6 +247,7 @@ erDiagram
     TENANT ||--o{ MEMBERSHIP : has
     COLLECTION ||--o{ MEMBERSHIP : "shared via"
     COLLECTION ||--o{ DOCUMENT : contains
+    DOCUMENT ||--o{ DOCUMENT_TEXT : "one per version"
     DOCUMENT ||--o{ SECTION : "has headings"
     SECTION ||--o{ SECTION : "parent of"
     SECTION ||--o{ CHUNK : contains
@@ -254,11 +260,12 @@ erDiagram
     TENANT { string id PK  string name }
     MEMBERSHIP { string user_id  string collection_id FK  string role }
     COLLECTION { string id PK  string tenant_id FK  string name  datetime created_at }
-    DOCUMENT { string id PK  string collection_id FK  string filename  string sha256  int current_version  int pages  string status }
+    DOCUMENT { string id PK  string collection_id FK  string filename  string sha256  int size_bytes  string title  int current_version  int pages  string status  string error }
+    DOCUMENT_TEXT { string document_id PK  int version PK  text text }
     SECTION { string id PK  string document_id FK  int version  string parent_id FK  string title  string path  int level  int ordinal  int char_start  int char_end }
     CHUNK { string id PK  string document_id FK  string collection_id  int version  int ordinal  int page  string section_id FK  string section_path  int char_start  int char_end  int tokens  text text  string prev_id  string next_id }
     ANALYSIS_RESULT { string document_id FK  string module  int version  json result  string model_version }
-    JOB { string id PK  string type  string document_id FK  string status  float progress  int attempts  int max_attempts  datetime locked_until  string error  datetime updated_at }
+    JOB { string id PK  string type  string document_id FK  string status  string stage  float progress  int attempts  int max_attempts  datetime locked_until  string locked_by  string error  json payload  datetime updated_at }
     ENTITY { string id PK  string collection_id  string name  string type }
     MENTION { string entity_id FK  string chunk_id FK  int char_start  int char_end }
 ```
@@ -279,13 +286,22 @@ Notes:
   the titles joined with `" > "` (`"3 Methodology > 3.2 Dataset"`), so "this section and
   everything under it" is a prefix test. A document with no headings gets one root section.
   **A chunk always belongs to exactly one section** — chunks never cross a heading.
-- **FTS5 table:** `chunk_fts(chunk_id UNINDEXED, collection_id UNINDEXED, section_path, text)`,
-  kept in sync with `CHUNK` by the ingest pipeline (upsert by `chunk_id`). Indexing the
-  section path lets BM25 match heading words too.
+- **Document text:** `DOCUMENT_TEXT` keeps the cleaned text of each version. Section and
+  chunk `char_start`/`char_end` point into it (highlighting, citations).
+- **FTS5 table:** `chunk_fts(section_path, text)` is an **external-content** index over
+  `CHUNK` (`content='chunk'`, `content_rowid='rowid'`). Triggers on insert, update and
+  delete keep it in step **inside the same transaction**, so SQLite and BM25 can never
+  disagree. Visibility filters (collection, current version) come from joining `CHUNK`
+  and `DOCUMENT`. Chunks must be written with `INSERT … ON CONFLICT DO UPDATE`;
+  `INSERT OR REPLACE` would skip the delete trigger. Indexing the section path lets BM25
+  match heading words too.
 - **ChromaDB:** one collection named `chunks`, vector ID = chunk ID, metadata =
   `{document_id, collection_id, version, page, section_id, section_path}`.
 - **File store:** originals saved as `files/<sha256>` so duplicate uploads are detected and
-  ingestion can be re-run from the original.
+  ingestion can be re-run from the original. A file is removed when the last document
+  using it is deleted.
+- **Deletes cascade** from `DOCUMENT` to its text, sections, chunks (and FTS rows, by
+  trigger), analysis results and jobs (`PRAGMA foreign_keys=ON`).
 
 ---
 
@@ -309,18 +325,30 @@ sequenceDiagram
     UI->>API: GET /jobs/{id}/events (SSE)
     W->>DB: claim job (PENDING→PROCESSING, set lease)
     W->>FS: read original
-    W->>W: parse → clean → chunk (deterministic IDs, version n+1)
-    W->>DB: upsert CHUNK rows + FTS5 rows (progress 40%)
-    W->>V: upsert vectors (progress 80%)
-    W->>DB: flip current_version; delete old version (DB, FTS5, Chroma)
-    W->>DB: JOB → COMPLETED (last step); DOCUMENT status=READY
+    W->>W: parse → clean → section tree → chunk (deterministic IDs, version n+1)
+    W->>DB: clear version n+1, upsert text + SECTION + CHUNK rows (FTS5 by trigger, one transaction)
+    W->>V: embed "header + chunk" in batches, upsert vectors (progress 35→90%)
+    W->>DB: flip current_version, DOCUMENT status=READY; delete old versions (DB + FTS5)
+    W->>V: delete old versions' vectors
+    W->>DB: JOB → COMPLETED (last step)
     API-->>UI: progress events … completed
     Note over W,DB: Analysis modules (NER, summary, coref) run as<br/>separate jobs after ingest completes.
 ```
 
 If the worker dies at any step, the job's lease expires, the job returns to `PENDING`,
 and the whole job runs again. Because every write is an upsert keyed by deterministic
-IDs, the second run produces the same final state (section 8).
+IDs, the second run produces the same final state (section 8). Searches only see
+`current_version`, and every vector-store hit is re-checked against SQLite, so vectors
+left behind by an interrupted run are never shown.
+
+**Upload checks** (before anything is stored): extension `.pdf`/`.docx`/`.txt`, content
+matches the type (`%PDF`, ZIP header, no NUL bytes), size ≤ `CADIS_MAX_UPLOAD_MB`, not
+empty. The same bytes uploaded again to the same collection return the existing document
+(`duplicate: true`) instead of a new job.
+
+**Delete:** SQLite first (cascade + FTS5 triggers), then the document's vectors, then the
+original file if no other document uses it. If the vector delete fails, the leftovers are
+invisible to search and `scripts/check_consistency.py --repair` removes them.
 
 ---
 
@@ -374,10 +402,11 @@ stateDiagram-v2
 
 | Operation | How |
 |---|---|
-| **Claim** | `UPDATE job SET status='PROCESSING', locked_until=now+10min, attempts=attempts+1 WHERE id=(SELECT id FROM job WHERE status='PENDING' ORDER BY created_at LIMIT 1) AND status='PENDING'` — if 0 rows changed, another worker got it |
-| **Heartbeat** | Every ~30 s while running: extend `locked_until`, write `progress` |
-| **Recover** | At startup and every minute: `PROCESSING` jobs with `locked_until < now` → `PENDING` |
-| **Fail** | Save `error`; back to `PENDING` if `attempts < max_attempts`, else `FAILED` |
+| **Claim** | Pick the oldest `PENDING` job, then `UPDATE job SET status='PROCESSING', locked_by=<worker>, locked_until=now+90s, attempts=attempts+1 WHERE id=<it> AND status='PENDING'` — if 0 rows changed, another worker got it |
+| **Fencing** | Every later update has `WHERE locked_by=<worker> AND status='PROCESSING'`, so a worker whose lease was taken over cannot complete or fail the job |
+| **Heartbeat** | A thread extends `locked_until` every 20 s; handlers write `stage` and `progress` (and get `JobLost` if the job is no longer theirs) |
+| **Recover** | At startup and every 30 s: `PROCESSING` jobs with `locked_until < now` → `PENDING` (or `FAILED` on the last attempt). After a crash a job resumes within about two minutes. |
+| **Fail** | Save `error`; back to `PENDING` if `attempts < max_attempts`, else `FAILED`. `PermanentJobError` (unreadable file, no text) fails at once. Manual retry: `POST /jobs/{id}/retry` |
 | **Idempotency** | Handlers only upsert by deterministic IDs; `COMPLETED` is written last |
 | **Consistency** | `scripts/check_consistency.py` compares chunk IDs in SQLite, FTS5 and ChromaDB, and repairs from SQLite |
 
@@ -391,8 +420,12 @@ SQLite settings for this to work with an API and a worker in parallel: WAL journ
 | Method & path | Body / params | Returns |
 |---|---|---|
 | `GET /health` | — | status, version, loaded models |
-| `POST /collections` · `GET /collections` | `{ name }` | collection(s) visible to the tenant |
-| `POST /collections/{id}/documents` | multipart files | `202` + `[{ document_id, job_id }]` |
+| `POST /collections` · `GET /collections` · `GET /collections/{id}` | `{ name }` | collection(s) visible to the tenant, with document counts |
+| `GET /collections/{id}/documents` | — | documents with status and latest job |
+| `POST /collections/{id}/documents` | multipart files | `202` + `[{ document_id, job_id, duplicate }]`; whole batch rejected on a bad file (415 type, 413 size, 422 empty) |
+| `GET /documents/{id}/sections` | — | section tree of the current version, with chunk counts |
+| `POST /documents/{id}/reingest` | — | `202` + `{ document_id, job_id }` (new version) |
+| `POST /jobs/{id}/retry` | — | `202` + job; only `FAILED` jobs (else 409) |
 | `GET /documents/{id}` · `DELETE /documents/{id}` | — | document info · deletes chunks, vectors, FTS rows, results |
 | `GET /jobs/{id}` · `GET /jobs/{id}/events` | — | job state · SSE stream of progress |
 | `GET /documents/{id}/analysis/{module}` | `?page=&page_size=` | stored module result, paginated |
@@ -437,11 +470,15 @@ development). Examples:
 | Setting | Default | Meaning |
 |---|---|---|
 | `CADIS_DATA_DIR` | `./var` | SQLite file, ChromaDB folder, file store |
-| `CADIS_DATABASE_URL` | `sqlite:///./var/cadis.db` | swap to Postgres later |
+| `CADIS_DATABASE_URL` | empty → `sqlite:///<data_dir>/cadis.db` | swap to Postgres later |
 | `CADIS_FRONTEND_URLS` | `http://localhost:3000` | CORS allow-list (replaces `FRONTEND_URL`) |
 | `CADIS_EMB_MODEL` / `CADIS_RERANK_MODEL` / `CADIS_NLI_MODEL` / `CADIS_QA_MODEL` / `CADIS_SUM_MODEL` / `CADIS_NER_MODEL` | see DECISIONS | model IDs |
 | `CADIS_LLM_PROVIDER` / `CADIS_LLM_MODEL` / `CADIS_LLM_API_KEY` | unset | generative answers disabled when unset → extractive mode |
-| `CADIS_CHUNK_TOKENS` / `CADIS_CHUNK_OVERLAP` | `384` / `48` | chunking; chunk + header must fit the embedding model (≤ 256 tokens for MiniLM, ≤ 512 for BGE — ADR-011). Startup fails if it does not. |
+| `CADIS_CHUNK_TOKENS` / `CADIS_CHUNK_OVERLAP` | `200` / `24` | chunk size in embedding tokens. The pipeline also shrinks each section's budget so header + chunk fit the model (MiniLM 256; raise to ~384 with a 512-token BGE model — ADR-011) |
+| `CADIS_CHUNK_HEADER_MAX_TOKENS` / `CADIS_EMBED_BATCH_SIZE` | `40` / `32` | contextual header cap; chunks embedded per batch |
+| `CADIS_RUN_WORKER` | `true` | start the in-process job worker with the app |
+| `CADIS_JOB_LEASE_SECONDS` / `_HEARTBEAT_SECONDS` / `_RECOVER_SECONDS` / `_MAX_ATTEMPTS` | `90` / `20` / `30` / `3` | job leases and retries (ADR-013) |
+| `CADIS_DEFAULT_TENANT` / `CADIS_DEFAULT_USER` | `default` / `local` | single-user mode until accounts exist (Phase 6) |
 | `CADIS_RETRIEVE_K` / `CADIS_RERANK_K` | `50` / `8` | retrieval sizes |
 | `CADIS_MAX_UPLOAD_MB` | `25` | upload limit |
 
@@ -484,14 +521,14 @@ Update this table in the same commit that changes the status.
 | Tests (unit / integration / slow) + CI | 0 | Unit + slow tests done (`2008457`); CI (`a91a548`) green on GitHub; integration tier comes with Phase 1 |
 | Evaluation set + `eval.py` | 0 | Done (`bf1b85a`, expanded after `68382dc`): 8 documents, 60 questions (10 per type), baseline in `data/eval/results/phase0.json` |
 | V1 fixes: chunked NER, MiniLM 256-token cap, cached passage embeddings, no n×n matrix, PCA plot | 0 | Done (`9a4f57c`) |
-| Storage: SQLAlchemy tables + Alembic, file store | 1 | Not started |
-| Tenancy: default tenant, `collection_id` everywhere, required filters, isolation test | 1 | Not started |
-| Job queue: states, claim/lease/recover, worker | 1 | Not started |
-| Ingest: parsers, cleaning, chunking, idempotent indexing | 1 | Not started |
-| Section tree (`SECTION`, section-bounded chunks, `section_path` in Chroma + FTS5) | 1 | Not started |
-| New API: collections, documents, jobs | 1 | Not started |
-| Vector store (ChromaDB) + exact baseline | 2 | Not started |
-| Keyword store (FTS5) + hybrid RRF | 2 | Not started |
+| Storage: SQLAlchemy tables + Alembic, file store | 1 | Done (`d870a4d`) |
+| Tenancy: default tenant, `collection_id` everywhere, required filters, isolation test | 1 | Done (`d870a4d`, `42b48be`); single-user until Phase 6 |
+| Job queue: states, claim/lease/recover, worker | 1 | Done (`60e9bb2`); live kill/restart test passed |
+| Ingest: parsers, cleaning, chunking, idempotent indexing | 1 | Done (`0051287`); OCR not supported (scanned PDFs fail with "no text") |
+| Section tree (`SECTION`, section-bounded chunks, `section_path` in Chroma + FTS5) | 1 | Done (`0051287`) |
+| New API: collections, documents, jobs | 1 | Done (`42b48be`) |
+| Vector store (ChromaDB) + exact baseline | 2 | ChromaDB store + tenant-scoped dense search done in Phase 1 (`d870a4d`, `0051287`); exact baseline not started |
+| Keyword store (FTS5) + hybrid RRF | 2 | FTS5 index + keyword search done in Phase 1; RRF not started |
 | Cross-encoder re-rank | 2 | Not started |
 | Section soft filter (name resolution, filtered + unfiltered RRF) | 2 | Not started |
 | LLM client + structured claims | 3 | Not started |
@@ -500,7 +537,7 @@ Update this table in the same commit that changes the status.
 | Query planner (rewrite, multi-hop, comparison, section-targeted sub-questions) | 4 | Not started |
 | Analysis rework (stored results, coref, chunked NER, PCA) | 5 | Not started |
 | Production storage, ONNX, auth, limits, monitoring | 6 | Not started |
-| Frontend: library, ask, viewer, API-backed module pages | 1–5 | Not started |
+| Frontend: library, ask, viewer, API-backed module pages | 1–5 | Library page done (`2991521`); ask, viewer, module pages not started |
 
 ---
 
