@@ -1,0 +1,13 @@
+# Tool configuration for the CADIS backend. Dependencies live in the
+# repository-root requirements.txt / requirements-dev.txt (the Dockerfile uses them).
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-m 'not slow' --strict-markers"
+markers = [
+    "slow: loads real models (downloads ~2 GB on first run). Run with: pytest backend -m slow",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

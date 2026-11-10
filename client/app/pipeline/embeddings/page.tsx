@@ -13,6 +13,8 @@ interface VecRow { sentence: string; dim0: number; dim1: number; dim2: number; n
 interface Data {
   sentences: string[]; dims: number; similarity_matrix: number[][]
   top_pairs: Pair[]; positions: Position[]; vector_preview: VecRow[]
+  // Added in V2 Phase 0; absent in results cached by older versions.
+  total_sentences?: number; matrix_size?: number; projection?: "pca"
 }
 
 export default function EmbeddingsPage() {
@@ -71,7 +73,7 @@ export default function EmbeddingsPage() {
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
             className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6">
             <h2 className="text-white font-semibold mb-1">Vector Space</h2>
-            <p className="text-zinc-600 text-xs font-mono mb-4">2D projection of {data.dims}-dim sentence embeddings (dim[0] × dim[1]) · hover dots to preview</p>
+            <p className="text-zinc-600 text-xs font-mono mb-4">2D projection of {data.dims}-dim sentence embeddings ({data.projection === "pca" ? "PCA, first two components" : "dim[0] × dim[1]"}) · hover dots to preview</p>
             <div className="relative">
               <svg viewBox="0 0 100 100" className="w-full h-72 rounded-xl bg-zinc-950 border border-zinc-800">
                 {/* Grid lines */}
@@ -111,7 +113,14 @@ export default function EmbeddingsPage() {
           {/* Vector preview table */}
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
             className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6 overflow-x-auto">
-            <h2 className="text-white font-semibold mb-4">Embedding Vector Preview</h2>
+            <h2 className="text-white font-semibold mb-4">
+              Embedding Vector Preview
+              {data.total_sentences !== undefined && data.vector_preview.length < data.total_sentences && (
+                <span className="ml-2 text-xs font-mono font-normal text-zinc-500">
+                  first {data.vector_preview.length} of {data.total_sentences} sentences
+                </span>
+              )}
+            </h2>
             <table className="w-full text-xs font-mono min-w-[560px]">
               <thead>
                 <tr className="border-b border-zinc-800 text-zinc-500">
@@ -135,7 +144,14 @@ export default function EmbeddingsPage() {
           {/* Similarity matrix */}
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
             className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6">
-            <h2 className="text-white font-semibold mb-4">Cosine Similarity Matrix</h2>
+            <h2 className="text-white font-semibold mb-4">
+              Cosine Similarity Matrix
+              {data.total_sentences !== undefined && data.matrix_size !== undefined && data.matrix_size < data.total_sentences && (
+                <span className="ml-2 text-xs font-mono font-normal text-zinc-500">
+                  first {data.matrix_size} of {data.total_sentences} sentences · top pairs below use all sentences
+                </span>
+              )}
+            </h2>
             <div className="overflow-x-auto">
               <table className="text-xs font-mono">
                 <tbody>

@@ -1,0 +1,12 @@
+# Keep the build context small; the image only needs requirements.txt and backend/cadis.
+.git
+client
+data
+var
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+.venv
+venv
+backend/tests
+*.md

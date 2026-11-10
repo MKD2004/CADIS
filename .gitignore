@@ -35,3 +35,9 @@ uploads/
 .claude/
 # Local reference notes (not tracked)
 context.md
+
+# Pytest cache
+.pytest_cache/
+
+# CADIS V2 data dir (SQLite, ChromaDB, uploaded files) - never commit (ADR-007)
+var/

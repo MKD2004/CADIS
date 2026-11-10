@@ -1,7 +1,7 @@
 """
 CADIS latency benchmark — measures what model caching actually buys.
 
-The five model loaders in api_server.py are wrapped in @lru_cache(maxsize=1),
+The five model loaders in cadis/models/registry.py are wrapped in @lru_cache(maxsize=1),
 so weights are loaded once per process and reused. This script quantifies that
 by timing the two things a request can pay for:
 
@@ -16,15 +16,19 @@ deployment and is bandwidth-dependent, so it is not reproducible as a number —
 run this locally and you are measuring load-from-disk, with weights already in
 ~/.cache/huggingface.
 
-Usage:
-    python benchmark.py              # default document sizes
-    python benchmark.py 200 800      # specific word counts
+Usage (from the repository root):
+    python backend/scripts/benchmark.py              # default document sizes
+    python backend/scripts/benchmark.py 200 800      # specific word counts
 """
 
+import os
 import sys
 import time
 
-import api_server as A
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from cadis.analysis.pipeline import process_text  # noqa: E402
+from cadis.models import registry  # noqa: E402
 
 SENTENCE = (
     "The agreement between Acme Corporation and Globex was signed in Berlin "
@@ -42,8 +46,8 @@ def make_doc(n_words):
 
 def time_model_load():
     """Time one cold fill of every lru_cache, then prove the cache hits."""
-    loaders = (A.get_nlp, A.get_embedder, A.get_ner_pipe,
-               A.get_qa_pipe, A.get_summarizer)
+    loaders = (registry.get_nlp, registry.get_embedder, registry.get_ner_pipe,
+               registry.get_qa_pipe, registry.get_summarizer)
 
     t0 = time.perf_counter()
     for fn in loaders:
@@ -58,22 +62,16 @@ def time_model_load():
     return cold, warm
 
 
-class _Req:
-    """Stands in for the pydantic ProcessRequest body."""
-    def __init__(self, text):
-        self.text = text
-
-
 def time_inference(n_words, repeats=2):
-    """Median-ish warm inference: discard the first run, keep the best of the rest."""
-    req = _Req(make_doc(n_words))
-    A.process(req)                      # discard — absorbs any lazy init
-    return min(_timed(req) for _ in range(repeats))
+    """Warm inference: discard the first run, keep the best (minimum) of the rest."""
+    text = make_doc(n_words)
+    process_text(text)                  # discard — absorbs any lazy init
+    return min(_timed(text) for _ in range(repeats))
 
 
-def _timed(req):
+def _timed(text):
     t0 = time.perf_counter()
-    A.process(req)
+    process_text(text)
     return time.perf_counter() - t0
 
 
