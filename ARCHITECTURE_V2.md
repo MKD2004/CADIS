@@ -7,10 +7,11 @@ where the code lives, and how data moves through the system.
 - **What** gets built in which order → [`CADIS V2.md`](CADIS%20V2.md) (the phase plan)
 - **What changed and when** → [`COMMIT_HISTORY.md`](COMMIT_HISTORY.md)
 
-> **Status: partly built.** As of 2026-11-10, Phases 0 and 1 are done: the V1 code lives in
-> `backend/cadis/`, and V2 storage, ingestion, background jobs and the collections /
-> documents / jobs API run next to the V1 endpoints (`/api/*` from `api/legacy.py`).
-> Retrieval for answers (Phase 2) and generated answers (Phase 3) are not built yet.
+> **Status: partly built.** As of 2026-11-10, Phases 0–2 are done: the V1 code lives in
+> `backend/cadis/`; V2 storage, ingestion, background jobs, the collections / documents /
+> jobs API and retrieval (hybrid + re-rank + section filter, `POST /search`, extractive
+> `POST /query`) run next to the V1 endpoints (`/api/*` from `api/legacy.py`).
+> Generated answers (Phase 3) and the query planner (Phase 4) are not built yet.
 > Section [11](#11-implementation-status) tracks what exists. Update that table as parts
 > are built; task-level progress is in [`CHECKLIST.md`](CHECKLIST.md).
 
@@ -136,15 +137,17 @@ CADIS/
 │   │   │   └── keyword_store.py        #   FTS5 query building + search (index kept by triggers)
 │   │   │
 │   │   ├── retrieval/
-│   │   │   ├── search.py               #   (Phase 1) tenant-scoped dense and keyword search
-│   │   │   ├── hybrid.py               #   dense + BM25 → Reciprocal Rank Fusion
+│   │   │   ├── retrieve.py             #   the pipeline: search → sections → RRF → re-rank → select
+│   │   │   ├── search.py               #   (Phase 1) single-index dense / keyword search (tests, debugging)
+│   │   │   ├── hybrid.py               #   Reciprocal Rank Fusion
 │   │   │   ├── sections.py             #   resolve section names; filtered + unfiltered search merged (ADR-028)
 │   │   │   ├── rerank.py               #   cross-encoder re-ranking
-│   │   │   ├── expand.py               #   small-to-big: add neighbour chunks
+│   │   │   ├── expand.py               #   small-to-big: neighbours in the same section, small named sections whole
 │   │   │   └── planner.py              #   query rewrite, multi-hop split, comparison + section routing (Phase 4)
 │   │   │
 │   │   ├── answer/
-│   │   │   ├── extractive.py           #   V1 RoBERTa span code (moved from api_server.py)
+│   │   │   ├── service.py              #   retrieve → expand → answer; builds the /query response
+│   │   │   ├── extractive.py           #   RoBERTa span finder (V1 text + V2 contexts)
 │   │   │   ├── generative.py           #   LLM → structured claims (JSON, validated)
 │   │   │   ├── llm.py                  #   LLMClient interface + provider implementations
 │   │   │   ├── calculator.py           #   safe ast-based arithmetic with Decimal + unit checks
@@ -372,6 +375,14 @@ flowchart TB
     V2 --> OUT["Response: claims with citations + checks<br/>status: answered / partially_supported / not_in_documents"]
 ```
 
+**As built in Phase 2** (`retrieval/retrieve.py`): the unfiltered dense + BM25 searches
+run first; section names are then resolved **only within the documents those searches
+found** (so "in the control group" cannot select an unrelated article's "Control"
+section); each target adds a dense + BM25 search limited to its sections; everything is
+fused with RRF; the top 20 are re-ranked; each named section gets one reserved slot in the
+final 8, and chunks overlapping an already chosen one by > 50 % are skipped. Median cost at
+18,765 chunks with 2 CPU threads: ~800 ms, of which re-ranking ~690 ms.
+
 **Section routing** is a *soft* filter. A question that names no section skips it and gets
 plain hybrid search. When a section is named, the filtered and unfiltered result lists are
 fused, so a wrongly guessed section lowers precision a little but never hides the answer.
@@ -429,7 +440,8 @@ SQLite settings for this to work with an API and a worker in parallel: WAL journ
 | `GET /documents/{id}` · `DELETE /documents/{id}` | — | document info · deletes chunks, vectors, FTS rows, results |
 | `GET /jobs/{id}` · `GET /jobs/{id}/events` | — | job state · SSE stream of progress |
 | `GET /documents/{id}/analysis/{module}` | `?page=&page_size=` | stored module result, paginated |
-| `POST /query` | `{ question, collection_ids, document_ids?, history?, mode? }` | structured claims (below) |
+| `POST /search` | `{ question, collection_ids?, document_ids?, k? }` | ranked chunks (section, page, offsets, score), recognised section names, per-stage timings (Phase 2) |
+| `POST /query` | `{ question, collection_ids, document_ids?, history?, mode? }` | structured claims (below). Phase 2: `mode: "extractive"` only — one claim whose citation is the exact span |
 | `POST /query/stream` | same | SSE: one event per verified claim, then a final summary event |
 | **Legacy** `POST /api/extract` · `/api/process` · `/api/qa-ask` | V1 bodies | V1 responses, until the frontend migration is done |
 
@@ -479,7 +491,11 @@ development). Examples:
 | `CADIS_RUN_WORKER` | `true` | start the in-process job worker with the app |
 | `CADIS_JOB_LEASE_SECONDS` / `_HEARTBEAT_SECONDS` / `_RECOVER_SECONDS` / `_MAX_ATTEMPTS` | `90` / `20` / `30` / `3` | job leases and retries (ADR-013) |
 | `CADIS_DEFAULT_TENANT` / `CADIS_DEFAULT_USER` | `default` / `local` | single-user mode until accounts exist (Phase 6) |
-| `CADIS_RETRIEVE_K` / `CADIS_RERANK_K` | `50` / `8` | retrieval sizes |
+| `CADIS_RETRIEVE_K` / `CADIS_RERANK_CANDIDATES` / `CADIS_RERANK_K` | `50` / `20` / `8` | per-list search size, chunks re-ranked, chunks returned |
+| `CADIS_RERANK_MODEL` / `CADIS_USE_RERANKER` | `cross-encoder/ms-marco-MiniLM-L-6-v2` / `true` | re-ranker (ADR-010) |
+| `CADIS_SECTION_FILTER` / `CADIS_SECTION_WHOLE_MAX_TOKENS` / `CADIS_EXPAND_NEIGHBOURS` | `true` / `400` / `1` | section soft filter, whole-section expansion, small-to-big |
+| `CADIS_EMB_QUERY_PREFIX` | `auto` | BGE instruction on queries for BGE models, none otherwise |
+| `CADIS_MAX_PER_DOCUMENT` | `0` (off) | cap on chunks per document in the final list |
 | `CADIS_MAX_UPLOAD_MB` | `25` | upload limit |
 
 V1 variable names (`QA_MODEL`, `SUM_MODEL`, `NER_MODEL`, `EMB_MODEL`, `FRONTEND_URL`) stay
@@ -527,10 +543,11 @@ Update this table in the same commit that changes the status.
 | Ingest: parsers, cleaning, chunking, idempotent indexing | 1 | Done (`0051287`); OCR not supported (scanned PDFs fail with "no text") |
 | Section tree (`SECTION`, section-bounded chunks, `section_path` in Chroma + FTS5) | 1 | Done (`0051287`) |
 | New API: collections, documents, jobs | 1 | Done (`42b48be`) |
-| Vector store (ChromaDB) + exact baseline | 2 | ChromaDB store + tenant-scoped dense search done in Phase 1 (`d870a4d`, `0051287`); exact baseline not started |
-| Keyword store (FTS5) + hybrid RRF | 2 | FTS5 index + keyword search done in Phase 1; RRF not started |
-| Cross-encoder re-rank | 2 | Not started |
-| Section soft filter (name resolution, filtered + unfiltered RRF) | 2 | Not started |
+| Vector store (ChromaDB) + exact baseline | 2 | Done (`d870a4d`, `8b7d0e8`); HNSW keeps 98 % of the exact top-10 |
+| Keyword store (FTS5) + hybrid RRF | 2 | Done (`8b7d0e8`) |
+| Cross-encoder re-rank | 2 | Done (`8b7d0e8`), 20 candidates |
+| Section soft filter (name resolution, filtered + unfiltered RRF) | 2 | Done (`8b7d0e8`); section lookup top-1 10/10 vs 8/10 without |
+| `/search` + extractive `/query` over collections | 2 | Done (`8b7d0e8`); evaluation at 18,765 chunks (`8fc3b7d`) |
 | LLM client + structured claims | 3 | Not started |
 | Calculator | 3 | Not started |
 | Verification (quote + NLI + number rule) | 3 | Not started |

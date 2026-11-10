@@ -37,7 +37,7 @@ Related: [`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) (how it fits together) ·
 | [008](#adr-008--sqlite-fts5-for-bm25-keyword-search) | SQLite FTS5 for BM25 keyword search | Accepted |
 | [009](#adr-009--hybrid-retrieval-merged-with-reciprocal-rank-fusion) | Hybrid retrieval merged with Reciprocal Rank Fusion | Accepted |
 | [010](#adr-010--cross-encoder-re-ranker) | Cross-encoder re-ranker | Accepted |
-| [011](#adr-011--embedding-model) | Embedding model (bge-small-en-v1.5, pending measurement) | Proposed |
+| [011](#adr-011--embedding-model) | Embedding model: MiniLM for now (measured in Phase 2) | Accepted |
 | [012](#adr-012--keep-an-exact-search-baseline-measure-before-tuning-hnsw) | Keep an exact-search baseline; measure before tuning HNSW | Accepted |
 | [013](#adr-013--database-backed-job-state-machine-in-process-worker-first) | Database-backed job state machine; in-process worker first | Accepted |
 | [014](#adr-014--idempotent-ingestion) | Idempotent ingestion | Accepted |
@@ -309,6 +309,10 @@ need tuning or normalising.
 **Alternatives.** Weighted score sum (needs normalisation and tuning per dataset). Dense
 only (misses exact terms).
 
+**Measured 2026-11-10 (Phase 2, 18,765 chunks, before re-ranking).** Dense only:
+recall@8 0.88, MRR 0.86 · BM25 only: 0.95 / 0.86 · hybrid RRF: **0.95 / 0.89**, recall@3
+0.82 (vs 0.72 / 0.77). Fusion is better than either index alone.
+
 **Revisit if** evaluation shows a learned or weighted fusion is clearly better.
 
 ---
@@ -326,6 +330,14 @@ cosine similarity. The L-6 model is small enough for CPU on ~50 pairs per query.
 **Alternatives.** `BAAI/bge-reranker-base` (more accurate, slower — first upgrade to try).
 LLM re-ranking (slow and costly). No re-ranker (V1; lower precision).
 
+**Measured 2026-11-10 (Phase 2).** The biggest single gain in retrieval: recall@3
+0.82 → **0.95**, MRR 0.89 → **0.98** over hybrid alone. Re-ranking **20** fused candidates
+gives the same quality as 30 or 50 and is much faster (laptop: 598 / 817 / 1,147 ms per
+query; with 2 threads, ≈ a free HF Space: 804 ms for 20 vs 1,224 ms for 30). It is ~85 % of
+query time, so ONNX/int8 (Phase 6) or a smaller pool are the levers if latency must drop.
+Default `CADIS_RERANK_CANDIDATES=20`; each candidate is scored with its "Document › Section"
+header.
+
 **Revisit if** evaluation shows ranking errors in the top 8, or latency allows a larger
 model.
 
@@ -333,7 +345,7 @@ model.
 
 ## ADR-011 — Embedding model
 
-- **Status:** Proposed · **Date:** 2026-11-09 · **Decided by:** Phase 2 evaluation
+- **Status:** Accepted (MiniLM, for now) · **Date:** 2026-11-09, decided 2026-11-10 · **Decided by:** Phase 2 evaluation
 
 **Context.** V1 uses `all-MiniLM-L6-v2`, which reads at most **256 tokens** (a 200-word
 passage is already ~244).
@@ -355,6 +367,23 @@ the contextual header plus chunk fits 256 tokens. Measured on the eval set: larg
 (~384) and re-ingest. The Chroma collection records the model ID and refuses to open
 with a different one.
 
+**Decision 2026-11-10 (Phase 2, `results/phase2_models.json`).** Keep
+**`all-MiniLM-L6-v2` with 200-token chunks.** Measured on the eval set plus 732 WikiText-2
+distractor articles (≈ 18,800 chunks at 200 tokens):
+
+| Model @ chunk tokens | Dense only: recall@3 / @8 / MRR | Full pipeline (hybrid + re-rank): recall@3 / @8 / MRR | Ingest |
+|---|---|---|---|
+| MiniLM @ 200 | 0.72 / 0.88 / 0.86 | **0.95 / 0.98 / 0.98** | 1× |
+| bge-small @ 200 | 0.70 / 0.87 / 0.89 | 0.95 / 0.98 / 0.98 | 2× |
+| bge-small @ 384 | 0.80 / 0.88 / 0.91 | 0.92 / 0.97 / 0.99 | 2× (re-rank slower) |
+| bge-base @ 384 | not measured (run stopped: machine low on memory) | | |
+
+bge-small is the better embedder on its own, but after hybrid fusion and the cross-encoder
+the full pipeline is no better, ingestion is twice as slow, and longer chunks make
+re-ranking slower. **Revisit when** Phase 3's LLM wants larger contexts (larger chunks with a
+512-token model), when bge-base can be measured, or when dense-only quality matters (e.g. the
+re-ranker is turned off for speed).
+
 **Revisit if** a better small model appears or multilingual documents are needed.
 
 ---
@@ -371,6 +400,13 @@ settings at defaults until measurements on our data show a problem.
 on vector size, hardware, concurrency, configuration and filtering. At CADIS's scale,
 exact search is fast. ChromaDB is used for persistence and filtering (ADR-007); HNSW
 comes with it. Do not optimise for a workload we do not have.
+
+**Measured 2026-11-10 (Phase 2, `scripts/bench_retrieval.py`, 18,765 vectors).** HNSW
+(ChromaDB defaults) returns **98.1 %** of the exact top-10 and **91.1 %** of the exact
+top-50. End-to-end recall@8 is 0.98, so the defaults stay. Note: at this size the exact
+NumPy scan is *faster* (10.6 ms vs 58.6 ms per query); HNSW pays off only at much larger
+collections. If the top-50 candidate loss ever shows up in evaluation, raise `ef_search`
+first.
 
 **Revisit if** recall vs exact search drops, or search latency grows with collection size.
 
@@ -772,6 +808,23 @@ what is inside.
 - Heading detection is heuristic for PDF/TXT; bad headings degrade to plain hybrid
   search, never to lost answers.
 - A new evaluation question type, **section-targeted**, tracks this.
+
+**Measured 2026-11-10 (Phase 2, `8b7d0e8`).**
+- *How names are matched:* word stems (first five letters), numbering ignored, and a cue
+  must sit right next to the name — *from / in / under / according to* (only "the", "to",
+  "of" in between) before it, or *section / part / clause / chapter* right after it. A looser
+  rule (any cue within three words, or a capitalised name) fired on 24 of 60 ordinary
+  questions once Wikipedia articles with sections like "History" were in the collection.
+- *Only sections of documents the unfiltered search already found* are used, so a phrase
+  like "in the control group" cannot pull in an unrelated article's "Control" section.
+  False triggers: 24 → **2** of 60.
+- *Effect:* on 10 section-targeted questions with strong content words, **no difference**
+  (recall@8 1.00 with and without) — the contextual header and the indexed `section_path`
+  already carry the section name into every chunk. On 10 questions where the section name
+  is the main clue (`section_lookup.jsonl`), the right section ranks first **10/10 with the
+  filter vs 8/10 without** ("Background" and "Summary" of the right document were lost among
+  Wikipedia sections of the same name). The filter therefore stays on; cost ≈ 1 ms per query
+  (title index cached).
 
 **Revisit if** section-targeted questions do no better than plain hybrid search on the
 evaluation set (then drop the filtered search and keep only clean chunking), or if the

@@ -13,10 +13,11 @@ through each stage in an interactive Next.js dashboard.
 
 > **CADIS V2 is in progress.** V2 turns CADIS from a single-document demo into a system
 > that stores **many large documents** and answers questions **across** them, with cited,
-> checked answers. Phases 0–1 are done: documents can now be uploaded into collections,
-> stored and processed in the background (see the [Library](#try-the-v2-library-phase-1)).
-> Answering questions across them comes in Phases 2–4; the six-module analysis app is
-> still V1. Jump to [CADIS V2](#cadis-v2--many-documents-cited-answers) for the design
+> checked answers. Phases 0–2 are done: documents are uploaded into collections and
+> processed in the background (see the [Library](#try-the-v2-library-phase-1)), and
+> questions are answered across a whole collection with hybrid search, re-ranking and
+> section-aware retrieval (`POST /query`, extractive answers with a citation for now).
+> LLM-written answers with checks come in Phase 3; the six-module analysis app is still V1. Jump to [CADIS V2](#cadis-v2--many-documents-cited-answers) for the design
 > and roadmap.
 
 ---
@@ -61,7 +62,7 @@ Paper.pdf
 
 Because a chunk never spans two sections, one chunk is about one topic.
 
-### How a question is answered (proposed flow)
+### How a question is answered
 
 ```mermaid
 flowchart TB
@@ -96,8 +97,8 @@ hybrid search. HNSW stays the search engine; the tree guides it
 |---|---|---|
 | 0 — Foundation | Package split, config, tests, evaluation set, CI, V1 scale fixes | ✅ Done |
 | 1 — Ingestion and storage | Stored collections, background jobs, section tree, section-aware chunking, tenancy, Library page | ✅ Done |
-| 2 — Better retrieval | Better embeddings, ChromaDB + BM25 hybrid, re-ranker, section soft filter | Next |
-| 3 — Generated answers | LLM claims with citations, two checks, Python calculator | Planned |
+| 2 — Better retrieval | ChromaDB + BM25 hybrid, cross-encoder re-ranker, section soft filter, `/search` + `/query` | ✅ Done |
+| 3 — Generated answers | LLM claims with citations, two checks, Python calculator | Next |
 | 4 — Cross-document | Query planner: multi-hop, comparison, section-targeted sub-questions | Planned |
 | 5 — Analysis rework | Stored per-document results, coreference, entity index | Planned |
 | 6 — Scale and deploy | Persistent storage, ONNX on CPU, auth, limits, monitoring | Planned |
@@ -122,6 +123,12 @@ curl -X POST localhost:8000/collections -H "Content-Type: application/json" -d '
 curl -X POST localhost:8000/collections/<collection_id>/documents -F files=@a.pdf -F files=@b.docx   # 202
 curl -N localhost:8000/jobs/<job_id>/events          # live progress (Server-Sent Events)
 curl localhost:8000/documents/<document_id>/sections # the section tree
+
+# Phase 2: ask across everything you may see (or narrow with "collection_ids")
+curl -X POST localhost:8000/search -H "Content-Type: application/json" \
+     -d '{"question": "From the Payment section, what interest applies to late payment?"}'
+curl -X POST localhost:8000/query  -H "Content-Type: application/json" \
+     -d '{"question": "How much energy can the Harlow Ridge battery store?"}'
 ```
 
 Measured on a CPU laptop: 20 PDFs × 105 pages uploaded in one request were all ready
@@ -135,21 +142,25 @@ keyword index), `chroma/` (vectors) and `files/` (original uploads). On HF Space
 
 ### Measuring progress
 
-Every phase is measured on the same evaluation set in `data/eval/`: 8 documents and 60
-questions, 10 each of single-fact, numeric, cross-passage, cross-document, comparison and
-unanswerable (section-targeted questions are added in Phase 2). Phase 0 baseline with V1
-retrieval and extractive QA (`data/eval/results/phase0.json`):
+Every phase is measured on the same evaluation set in `data/eval/`: 8 documents and 70
+questions, 10 each of single-fact, numeric, cross-passage, cross-document, comparison,
+unanswerable and (since Phase 2) section-targeted. Results are in `data/eval/results/`.
 
-| Metric | Phase 0 |
-|---|---|
-| Recall@1 / @3 / @6 | 0.34 / 0.74 / 0.94 |
-| MRR | 0.86 |
-| Exact match: single-fact / cross-passage | 0.90 / 0.70 |
-| Exact match: numeric / cross-document / comparison | 0.00 / 0.20 / 0.20 |
-| Unanswerable questions correctly declined | 0.70 |
-| Latency median / p95 | 1.7 s / 2.0 s |
+| Metric | Phase 0 (V1) | Phase 2 | Phase 2, 18,765 chunks |
+|---|---|---|---|
+| Recall@3 / @6 / @8 (all evidence in top k) | 0.74 / 0.94 / – | **0.95 / 0.98 / 1.00** | 0.95 / 0.98 / 0.98 |
+| MRR (first right chunk) | 0.86 | **0.98** | 0.98 |
+| Exact match: single-fact / cross-passage | 0.90 / 0.70 | 0.80 / 0.70 | 0.80 / 0.70 |
+| Exact match: numeric / cross-document / comparison | 0.00 / 0.20 / 0.20 | 0.00 / 0.30 / 0.10 | 0.00 / 0.30 / 0.10 |
+| Unanswerable questions correctly declined | 0.70 | 0.60 | 0.50 |
+| Retrieval latency, 2 CPU threads (≈ HF Space) | – | – | median 0.8 s |
 
-Numeric, cross-document and comparison questions are what V2's later phases target.
+The "18,765 chunks" column adds 732 Wikipedia articles (WikiText-2) as distractors.
+Phase 0 searched only 28 passages, so its recall is flattered; Phase 2 finds the evidence
+almost always, even among 670× more text. Answers barely moved because the **extractive
+model is now the limit**: the evidence is in its context 98–100 % of the time, but it can
+only copy one span — it cannot add numbers, compare or say "not in the documents"
+reliably. That is Phase 3's job.
 
 **V2 documents:** [`CADIS V2.md`](CADIS%20V2.md) (phase plan and the ideas behind it) ·
 [`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) (components, data model, flows) ·
@@ -348,6 +359,8 @@ pytest backend -m slow                         # real models (downloads ~2 GB on
 python backend/scripts/eval.py                 # retrieval + answer quality on data/eval
 python backend/scripts/eval.py --save phaseN   # also write data/eval/results/phaseN.json
 python backend/scripts/check_consistency.py    # SQLite vs ChromaDB vs FTS5 (--repair to fix)
+python backend/scripts/eval.py --distractors 732 --data-dir var/eval-big   # + 732 Wikipedia articles (~18,800 chunks)
+python backend/scripts/bench_retrieval.py --data-dir var/eval-big --threads 2   # latency ≈ HF Space, HNSW vs exact
 ```
 
 Integration tests (`backend/tests/integration/`) use a real SQLite and ChromaDB in a temp
@@ -377,6 +390,8 @@ brackets are still accepted.
 | `CADIS_MAX_UPLOAD_MB` | Backend | Upload size limit per file (default 25) |
 | `CADIS_CHUNK_TOKENS` / `CADIS_CHUNK_OVERLAP` | Backend | Chunk size and overlap in embedding tokens (default 200 / 24) |
 | `CADIS_RUN_WORKER` | Backend | Start the background job worker with the app (default `true`) |
+| `CADIS_RERANK_MODEL` / `CADIS_USE_RERANKER` / `CADIS_RERANK_CANDIDATES` | Backend | Cross-encoder re-ranker (default `ms-marco-MiniLM-L-6-v2`, on, 20 candidates) |
+| `CADIS_SECTION_FILTER` | Backend | Use section names in questions as a soft filter (default `true`) |
 
 Tuning values (passage size, QA window, NER window, summary chunk size, job leases, …)
 are listed in `config.py`, each overridable the same way.
@@ -398,6 +413,8 @@ are listed in `config.py`, each overridable the same way.
 | `/documents/{id}/reingest` | POST | — | `202` + new job (new version) |
 | `/jobs/{id}` · `/jobs/{id}/events` | GET | — | Job state · live progress (SSE) |
 | `/jobs/{id}/retry` | POST | — | Re-queue a failed job |
+| `/search` | POST | `{ question, collection_ids?, document_ids?, k? }` | Ranked chunks with sections, scores, recognised section names, timings |
+| `/query` | POST | `{ question, collection_ids?, document_ids? }` | `{ status, answer_text, claims: [{ text, citations }] }` (extractive for now) |
 
 V2 errors use `{ "detail": … }` with real status codes. Full design:
 [`ARCHITECTURE_V2.md` §9](ARCHITECTURE_V2.md#9-api).
@@ -417,7 +434,7 @@ CADIS/
 │   │   ├── answer/         # extractive QA (RoBERTa span decoding, passage cache)
 │   │   ├── ingest/         # parse → clean → section tree → chunks; ingest job, upload service
 │   │   ├── index/          # VectorStore (ChromaDB) and FTS5 keyword search
-│   │   ├── retrieval/      # tenant-scoped search (hybrid + re-rank in Phase 2)
+│   │   ├── retrieval/      # hybrid search, RRF, re-rank, section filter, small-to-big expansion
 │   │   ├── jobs/           # database-backed job queue and worker
 │   │   ├── storage/        # SQLAlchemy tables, repositories, file store
 │   │   └── models/         # registry.py — the only place models are loaded

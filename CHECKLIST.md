@@ -143,39 +143,56 @@ Not part of the done-when, worth knowing: search over the 2,683 chunks took ~25 
 
 ---
 
-## Phase 2 — Better retrieval  *(effort M)*
+## Phase 2 — Better retrieval  *(effort M)* — **done** (2026-11-10)
+
+Committed as `8b7d0e8` (retrieval + `/search`, `/query`) and `8fc3b7d` (evaluation at scale + results).
+Results: `data/eval/results/phase2*.json`. Scale test: the 8 eval documents + 732 WikiText-2
+articles as distractors = **18,765 chunks**.
 
 ### Tasks
 
-- [ ] **2.1 Embedding model upgrade** — compare MiniLM vs `bge-small-en-v1.5` vs `bge-base-en-v1.5` on the eval set; record result in ADR-011 (query instruction prefix for BGE; model ID stored with vectors)
-  - [ ] If a 512-token model wins: raise `CADIS_CHUNK_TOKENS` (~384, now 200 for MiniLM) and re-ingest; the Chroma collection refuses a different model ID, so start a fresh data dir or re-index
-- [ ] **2.2 Persistent vector store** (`index/vector_store.py`, ADR-007)
-  - [ ] `VectorStore` interface + ChromaDB (embedded, on disk) implementation
-  - [ ] One Chroma collection `chunks`, metadata `document_id`, `collection_id`, `version`, `page`
-  - [ ] Every search filtered by allowed collections and current version
-  - [ ] `index/exact.py` brute-force NumPy baseline; compare against ChromaDB on the eval set (ADR-012)
-  - [ ] HNSW settings left at defaults unless measurements say otherwise
-- [ ] **2.3 Keyword index** (`index/keyword_store.py`, ADR-008) — `KeywordStore` interface + SQLite FTS5; FTS5 enabled check at startup; `bm25()` sign converted
-- [ ] **2.4 Hybrid search + RRF** (`retrieval/hybrid.py`, ADR-009) — top ~50 from each, `1 / (60 + rank)`
-- [ ] **2.5 Cross-encoder re-ranker** (`retrieval/rerank.py`, ADR-010) — `ms-marco-MiniLM-L-6-v2`, keep top 6–8
-- [ ] **2.6 Diversity** — MMR or per-document limit
-- [ ] **2.6a Section soft filter** (`retrieval/sections.py`, ADR-028)
-  - [ ] Resolve section names in the question against real section titles (fuzzy + title embedding; "Methods" ≈ "Methodology")
-  - [ ] Run hybrid search with and without a `section_path` prefix filter; merge with RRF
-  - [ ] Pass a small matched section whole to the answer model
-  - [ ] No section named → plain hybrid search (no change in behaviour)
-  - [ ] Add a **section-targeted** question type to the eval set (~10 questions) and report it in `eval.py`
-- [ ] Small-to-big expansion with neighbour chunks (`retrieval/expand.py`)
-- [ ] **2.7 Use new retrieval in extractive QA first**, to measure retrieval gain alone
-- [ ] Add recall@8 to `eval.py` (`KS` is 1/3/6 today; the done-when below uses recall@8)
-- [ ] Grow the eval collection toward the ~10,000-chunk latency target (e.g. add long PDFs once Phase 1 ingests them)
-- [ ] Run `eval.py`, save `results/phase2.json`
+- [x] **2.1 Embedding model upgrade** — compared on the eval set + distractors (`results/phase2_models.json`); decision in ADR-011: **keep MiniLM (200-token chunks) for now**
+  - [x] MiniLM @200: full pipeline recall@3 0.95 / @8 0.98 / MRR 0.98; dense only 0.72 / 0.88 / 0.86; ingest 529 s
+  - [x] bge-small @200: full 0.95 / 0.98 / 0.98 (same); dense 0.70 / 0.87 / 0.89; ingest 2× slower
+  - [x] bge-small @384: full 0.92 / 0.97 / 0.99; dense 0.80 / 0.88 / 0.91; re-rank slower (longer chunks)
+  - [ ] bge-base @384 — not measured: the run was stopped because the machine ran low on memory. Re-run when there is RAM to spare (it needs a fresh `--data-dir`).
+  - [x] BGE query instruction prefix applied automatically (`models/embedding.py`); model ID stored with vectors (Phase 1)
+- [x] **2.2 Persistent vector store** (`index/vector_store.py`, ADR-007)
+  - [x] `VectorStore` interface + ChromaDB (embedded, on disk) implementation (Phase 1)
+  - [x] One Chroma collection `chunks`, metadata `document_id`, `collection_id`, `version`, `page`, `section_id`, `section_path`
+  - [x] Every search filtered by allowed collections; current version checked in SQLite
+  - [x] `index/exact.py` brute-force baseline; HNSW returns 98.1 % of the exact top-10 and 91.1 % of the exact top-50 (`bench_retrieval.py`, ADR-012)
+  - [x] HNSW settings left at defaults (end-to-end recall@8 is 0.98; see ADR-012 for when to revisit)
+- [x] **2.3 Keyword index** (`index/keyword_store.py`, ADR-008) — FTS5 with triggers (Phase 1), FTS5 check at startup, `bm25()` sign converted, section filter by `section_id`
+- [x] **2.4 Hybrid search + RRF** (`retrieval/hybrid.py`, `retrieval/retrieve.py`, ADR-009) — top 50 from each, `1 / (60 + rank)`. Hybrid recall@8 0.95 vs dense 0.88, keyword 0.95; MRR 0.89 vs 0.86 / 0.86
+- [x] **2.5 Cross-encoder re-ranker** (`retrieval/rerank.py`, ADR-010) — `ms-marco-MiniLM-L-6-v2` over the top **20** fused candidates (20 = 30 = 50 in quality, much faster), keep 8. Biggest single gain: recall@3 0.82 → 0.95, MRR 0.89 → 0.98
+- [x] **2.6 Diversity** — chunks overlapping an already chosen chunk by > 50 % are skipped; optional per-document cap (`CADIS_MAX_PER_DOCUMENT`, off by default)
+- [x] **2.6a Section soft filter** (`retrieval/sections.py`, ADR-028)
+  - [x] Resolve section names in the question against real section titles (word stems: "Methods" ≈ "Methodology"; numbering ignored; a cue word must sit right next to the name). The title-embedding idea was not needed.
+  - [x] Run hybrid search with and without a section filter; merge with RRF; one reserved result slot per named section
+  - [x] Only sections of documents the unfiltered search found (stops "in the control group" from matching an unrelated article's "Control" section): false triggers 24 → 2 of 60 questions
+  - [x] Pass a small matched section whole to the answer model (`retrieval/expand.py`)
+  - [x] No section named → plain hybrid search (no change in behaviour)
+  - [x] **Section-targeted** question type (10 questions) + `section_lookup.jsonl` (10 questions where the section name is the main clue), both reported by `eval.py`
+- [x] Small-to-big expansion with neighbour chunks, within the same section (`retrieval/expand.py`)
+- [x] **2.7 New retrieval used in extractive QA** (`answer/service.py`, `answer_contexts`) — `POST /query` (extractive mode, Phase 3 response shape) and `POST /search`
+- [x] Add recall@8 to `eval.py` (now `KS = 1, 3, 6, 8`)
+- [x] Grow the eval collection toward the ~10,000-chunk latency target — `eval.py --distractors 732` (WikiText-2, downloaded on demand, never committed) → 18,765 chunks
+- [x] Run `eval.py`, save `results/phase2.json` (+ `phase2_distractors.json`, `phase2_latency.json`, `phase2_models.json`)
 
 ### Done when
 
-- [ ] recall@8 clearly higher than the Phase 0 baseline
-- [ ] Section-targeted questions find evidence from *every* named section more often with the soft filter than without it (otherwise revisit ADR-028)
-- [ ] A query over ~10,000 chunks returns in about 1 s on the Space's CPU
+- [x] recall@8 clearly higher than the Phase 0 baseline
+  — Phase 0 had no recall@8; its best was recall@6 0.94 over only 28 passages. Phase 2 on the same 8 documents: recall@3 0.74 → **0.95**, recall@6 0.94 → **0.98**, recall@8 **1.00**, MRR 0.86 → **0.98**. With 18,765 chunks (670× more text): recall@8 **0.98**, MRR **0.98**.
+- [x] Section-targeted questions find evidence from *every* named section more often with the soft filter than without it
+  — On the 10 section-targeted questions **no difference** (1.00 vs 1.00): the contextual header and the indexed section path already put section names into every chunk. On the 10 section-lookup questions, where the section name is the main clue: right section first **10/10 with the filter vs 8/10 without** (generic "Background" and "Summary" sections are lost among Wikipedia sections of the same name). ADR-028 updated with these numbers.
+- [x] A query over ~10,000 chunks returns in about 1 s on the Space's CPU
+  — 18,765 chunks, PyTorch limited to **2 threads** (≈ a free HF Space): median **804 ms**, p95 987 ms (re-rank 687 ms of it). Measured on a laptop CPU, not on the Space itself; re-check after deploying (Phase 6).
+
+Answer quality did not move much, and that is expected: the extractive model is the limit now,
+not retrieval (evidence is inside the answer contexts for 98–100 % of questions). On the same
+8 documents: all answerable EM 0.43 (Phase 0: 0.40 over the earlier 50 answerable questions),
+numeric 0.00, comparison 0.10, unanswerable correctly declined 0.60. These are Phase 3's targets.
 
 ---
 
@@ -303,7 +320,7 @@ Not part of the done-when, worth knowing: search over the 2,683 chunks took ~25 
 
 | Decision | ADR | Needed by | Status |
 |---|---|---|---|
-| Embedding model (MiniLM / bge-small / bge-base) | 011 | Phase 2 | Proposed — decide by eval |
+| Embedding model (MiniLM / bge-small / bge-base) | 011 | Phase 2 | **Decided for now: MiniLM @ 200 tokens** (Phase 2 measurements); revisit when Phase 3 needs larger contexts; bge-base not yet measured |
 | LLM provider (hosted vs local) | 019 | Phase 3 | Open |
 | Production storage | 020 | First deployed V2 with real data | Open |
 | Coreference model | 025 | Phase 5 | Proposed |
