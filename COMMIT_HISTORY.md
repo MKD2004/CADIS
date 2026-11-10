@@ -182,3 +182,4 @@ The architecture V1 is based on. Frontend rebuilt in Next.js; backend became
 
 | Hash | Date | Type | Message | Area | Notes |
 |---|---|---|---|---|---|
+| `8b7d0e8` | 2026-11-10 | feat(retrieval) | add hybrid search, re-ranking, section soft filter and /search, /query | `backend/cadis/retrieval/`, `answer/service.py`, `api/query.py`, `index/exact.py`, `models/embedding.py`, tests | New model downloaded on first query: `cross-encoder/ms-marco-MiniLM-L-6-v2` (~90 MB). Re-ranking is ~85% of query time; `CADIS_RERANK_CANDIDATES` (default 20) trades speed for quality, `CADIS_USE_RERANKER=false` turns it off. Wrong section matches → `retrieval/sections.py` cue rules; `CADIS_SECTION_FILTER=false` disables the filter. ADR-009/010/012/028. |

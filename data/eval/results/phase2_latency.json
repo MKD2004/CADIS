@@ -1,0 +1,40 @@
+{
+ "chunks": 18765,
+ "threads": 2,
+ "embedding": "all-MiniLM-L6-v2",
+ "latency": {
+  "rerank_20": {
+   "median_ms": 804,
+   "p95_ms": 987,
+   "stages_median_ms": {
+    "embed": 10.6,
+    "search": 79.4,
+    "sections": 0.8,
+    "section_search": 0.1,
+    "load": 23.2,
+    "rerank": 687.2,
+    "select": 0.0
+   }
+  },
+  "rerank_30": {
+   "median_ms": 1224,
+   "p95_ms": 1397,
+   "stages_median_ms": {
+    "embed": 9.4,
+    "search": 80.9,
+    "sections": 0.9,
+    "section_search": 0.1,
+    "load": 24.4,
+    "rerank": 1098.0,
+    "select": 0.0
+   }
+  }
+ },
+ "hnsw_vs_exact": {
+  "overlap@10": 0.9814,
+  "overlap@50": 0.9109,
+  "hnsw_median_ms": 58.6,
+  "exact_median_ms": 10.6,
+  "exact_load_s": 3.6
+ }
+}

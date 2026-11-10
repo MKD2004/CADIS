@@ -1,0 +1,62 @@
+{
+ "note": "ADR-011 comparison, 2026-11-10: eval set + 732 WikiText-2 distractor articles. 'full' = hybrid + re-rank 20 + section filter; 'dense' = vector search only. bge-base-en-v1.5 @384 was not measured: the run was stopped because the machine ran low on memory.",
+ "runs": {
+  "minilm_200": {
+   "full": {
+    "recall@1": 0.4,
+    "recall@3": 0.95,
+    "recall@6": 0.983,
+    "recall@8": 0.983,
+    "mrr": 0.983
+   },
+   "chunks": 18765,
+   "embedding": "all-MiniLM-L6-v2",
+   "chunk_tokens": 200,
+   "dense": {
+    "recall@1": 0.333,
+    "recall@3": 0.717,
+    "recall@6": 0.867,
+    "recall@8": 0.883,
+    "mrr": 0.865
+   }
+  },
+  "bgesmall_200": {
+   "full": {
+    "recall@1": 0.4,
+    "recall@3": 0.95,
+    "recall@6": 0.983,
+    "recall@8": 0.983,
+    "mrr": 0.983
+   },
+   "chunks": 18765,
+   "embedding": "BAAI/bge-small-en-v1.5",
+   "chunk_tokens": 200,
+   "dense": {
+    "recall@1": 0.367,
+    "recall@3": 0.7,
+    "recall@6": 0.817,
+    "recall@8": 0.867,
+    "mrr": 0.889
+   }
+  },
+  "bgesmall_384": {
+   "full": {
+    "recall@1": 0.433,
+    "recall@3": 0.917,
+    "recall@6": 0.95,
+    "recall@8": 0.967,
+    "mrr": 0.992
+   },
+   "chunks": 11351,
+   "embedding": "BAAI/bge-small-en-v1.5",
+   "chunk_tokens": 384,
+   "dense": {
+    "recall@1": 0.4,
+    "recall@3": 0.8,
+    "recall@6": 0.833,
+    "recall@8": 0.883,
+    "mrr": 0.906
+   }
+  }
+ }
+}

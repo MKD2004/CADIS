@@ -10,7 +10,7 @@ spec = importlib.util.spec_from_file_location("cadis_eval", SCRIPT)
 ev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ev)
 
-TYPES = {"single", "numeric", "cross_passage", "cross_document", "comparison", "unanswerable"}
+TYPES = {"single", "numeric", "cross_passage", "cross_document", "comparison", "unanswerable", "section"}
 
 
 def test_every_evidence_quote_exists_and_ids_are_unique():
@@ -44,3 +44,21 @@ def test_f1_partial_credit_and_abstention():
     assert 0 < ev.best_em_f1("CEO Tim Cook said", ["Tim Cook"])[1] < 1
     assert ev.best_em_f1("", []) == (1.0, 1.0)          # correct abstention
     assert ev.best_em_f1("Boston", []) == (0.0, 0.0)    # answered an unanswerable question
+
+
+def test_section_lookup_targets_exist():
+    """Every section named in section_lookup.jsonl is a real section of its document."""
+    import json
+
+    from cadis.ingest.cleaning import clean_blocks
+    from cadis.ingest.parsers import parse_document
+    from cadis.ingest.sections import build_structure
+
+    lookup = ev.EVAL_DIR / "section_lookup.jsonl"
+    items = [json.loads(line) for line in lookup.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert items
+    for item in items:
+        path = ev.EVAL_DIR / "documents" / f"{item['doc']}.txt"
+        parsed = parse_document(path.name, path.read_bytes())
+        st = build_structure(clean_blocks(parsed.blocks, parsed.kind, parsed.pages), parsed.kind, item["doc"])
+        assert item["section"] in [s.path for s in st.sections], item["id"]
