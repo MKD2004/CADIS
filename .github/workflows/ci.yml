@@ -1,0 +1,69 @@
+# CI for CADIS (DECISIONS ADR-022).
+#  - backend: unit tests with fake models (slow real-model tests are skipped)
+#  - frontend: type-check + production build
+#  - dependency audits report findings but do not fail the build
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"          # matches the Dockerfile
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install CPU-only torch, then project deps
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-dev.txt
+
+      - name: Unit tests
+        run: pytest backend -q
+
+      - name: Dependency audit (report only)
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"              # Next.js 16 needs >= 20.9
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+
+      # next.config.mjs sets ignoreBuildErrors, so the build alone does not type-check.
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Dependency audit (report only)
+        continue-on-error: true
+        run: npm audit --audit-level=high
